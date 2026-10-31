@@ -1,7 +1,7 @@
-/// Duration rounding and formatting helpers.
-///
-/// Rounding is a *view* only — the exact per-session seconds are always stored.
-/// Totals are rounded to the nearest half-hour (sum-then-round, see spec D4).
+// Duration rounding and formatting helpers.
+//
+// Rounding is a *view* only — the exact per-session seconds are always stored.
+// Totals are rounded to the nearest half-hour (sum-then-round, see spec D4).
 
 const int _halfHourSeconds = 1800;
 
