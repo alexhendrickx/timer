@@ -33,6 +33,7 @@ class TimerEngine extends ChangeNotifier {
   Session? _running;
   Timer? _ticker;
   ResumeDecision? _pendingOrphan;
+  bool _resumeChecked = false;
 
   /// The open session, or null when idle.
   Session? get running => _running;
@@ -46,6 +47,11 @@ class TimerEngine extends ChangeNotifier {
   Future<void> start(int activityId) async {
     if (_running != null) {
       throw StateError('A timer is already running');
+    }
+    // Guard against a persisted open session the in-memory state doesn't know
+    // about (an unresolved orphan) — opening a second would corrupt resume.
+    if (await _repo.openSession() != null) {
+      throw StateError('An unresolved open session exists');
     }
     await _repo.startSession(activityId: activityId, start: _now());
     _running = await _repo.openSession();
@@ -64,8 +70,12 @@ class TimerEngine extends ChangeNotifier {
   }
 
   /// On launch, if a session was left open, returns a decision for the UI.
-  /// Null when there is nothing to resume.
+  /// Null when there is nothing to resume. Acts at most once per app run and
+  /// never while a session is already running, so a Home remount (navigating
+  /// away and back) cannot re-prompt over a live timer.
   Future<ResumeDecision?> detectOrphan() async {
+    if (_resumeChecked || _running != null) return null;
+    _resumeChecked = true;
     final open = await _repo.openSession();
     if (open == null) return null;
     final decision = ResumeDecision(
@@ -97,6 +107,7 @@ class TimerEngine extends ChangeNotifier {
     _pendingOrphan = null;
     if (open == null) return;
     await _repo.closeSession(open.id, orphan.lastSeenAt);
+    _running = null;
     notifyListeners();
   }
 

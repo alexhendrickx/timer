@@ -71,6 +71,37 @@ void main() {
     engine.dispose();
   });
 
+  test('detectOrphan acts only once per app run (no re-prompt after resume)',
+      () async {
+    await repo.startSession(activityId: a, start: DateTime(2026, 10, 31, 9, 0));
+    final engine = TimerEngine(repo, now: () => DateTime(2026, 10, 31, 17, 0));
+
+    final first = await engine.detectOrphan();
+    expect(first, isNotNull);
+    await engine.resumeKeepRunning();
+
+    // A Home remount (navigate away and back) calls detectOrphan again; it
+    // must NOT prompt over the live, still-open session.
+    expect(await engine.detectOrphan(), isNull);
+
+    await engine.stop();
+    engine.dispose();
+  });
+
+  test('start refuses to open a second session when one is open in the DB',
+      () async {
+    await repo.startSession(activityId: a, start: DateTime(2026, 10, 31, 9, 0));
+    final engine = TimerEngine(repo, now: () => DateTime(2026, 10, 31, 10, 0));
+
+    // Engine has no in-memory running session, but the DB holds an orphan.
+    await expectLater(() => engine.start(a), throwsStateError);
+    final openRows = await (db.select(db.sessions)
+          ..where((s) => s.endTime.isNull()))
+        .get();
+    expect(openRows, hasLength(1));
+    engine.dispose();
+  });
+
   test('resumeKeepRunning keeps the open session running', () async {
     var clock = DateTime(2026, 10, 31, 17, 0);
     final engine = TimerEngine(repo, now: () => clock);
