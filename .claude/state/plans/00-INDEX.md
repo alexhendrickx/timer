@@ -64,9 +64,9 @@ plans 03–10 above (the Follow-ups below are done).
 1. ~~Write a cross-platform design spec~~ — done: `2026-11-02-cross-platform-redesign-design.md`.
 2. ~~Rewrite plans 03–07 (+ add 08–10) to the cross-platform breakdown~~ — done (see table above).
 3. ~~Rework Home toward the focus-cards launcher~~ — planned in v0.3.0 (supersedes v0.2.0 dropdown).
-4. **Still open:** update the project `CLAUDE.md` "macOS desktop target only in v1"
-   constraint to cross-platform (iPhone + Mac) — the spec already supersedes it,
-   but the `CLAUDE.md` line should be reconciled separately.
+4. ~~Update the project `CLAUDE.md` "macOS desktop target only" constraint~~ —
+   done on this branch: `CLAUDE.md` now reads cross-platform + local-first
+   Supabase sync (commits `41ae0c3`, `c324509`).
 
 ## Quick-start & activity decisions (2026-11-02, deck 2)
 
