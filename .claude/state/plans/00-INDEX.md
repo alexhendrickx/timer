@@ -1,33 +1,43 @@
-# Build Index — Local Time Tracker (macOS)
+# Build Index — Cross-Platform Time Tracker (iPhone + Mac)
 
 Numbered build plans, one per app version. Run each in its own session, in
 order. Each targets a `pubspec.yaml` version and ships working, testable
 software on its own.
 
-**Spec:** `docs/superpowers/specs/2026-10-31-local-time-tracker-design.md`
+**Spec:** `docs/superpowers/specs/2026-11-02-cross-platform-redesign-design.md`
 
 | # | Version | Plan | Ships |
 |---|---------|------|-------|
-| 01 | v0.1.0 | `01-v0.1.0-scaffold.md` | Running macOS app: theme, drift DB, chosen data folder, empty home + settings |
-| 02 | v0.2.0 | `02-v0.2.0-core-tracker.md` | Activities CRUD, pick-activity→Start/Stop, live elapsed, persist + crash-resume |
-| 03 | v0.3.0 | `03-v0.3.0-menu-bar.md` | Menu-bar icon with live title + popover (Start/Stop, quick note), window launch |
-| 04 | v0.4.0 | `04-v0.4.0-reminders.md` | Break-reminder notifications (default 90/15) + Settings controls |
-| 05 | v0.5.0 | `05-v0.5.0-history.md` | History list, filters, rounded totals + amounts, notes, re-tag, archive/delete |
-| 06 | v0.6.0 | `06-v0.6.0-export.md` | CSV + HTML + PDF export, grouped by activity, optional per-activity files |
-| 07 | v1.0.0 | `07-v1.0.0-polish.md` | App icon, end-to-end verification, optional code-sign |
+| 01 | v0.1.0 | `01-v0.1.0-scaffold.md` | Running app: theme, drift DB, chosen data folder, empty home + settings *(shipped)* |
+| 02 | v0.2.0 | `02-v0.2.0-core-tracker.md` | Activities CRUD, pick-activity→Start/Stop, live elapsed, persist + crash-resume *(shipped)* |
+| 03 | v0.3.0 | `03-v0.3.0-focus-home.md` | Focus-cards home launcher (ring + today total), one-tap instant start, Running screen, D1 switch confirm |
+| 04 | v0.4.0 | `04-v0.4.0-platform-shell-mac.md` | PlatformShell seam + Mac menu-bar (live title, popover) + global-hotkey Spotlight picker |
+| 05 | v0.5.0 | `05-v0.5.0-iphone-quickstart.md` | iPhone quick-start: Action button/Siri onto the picker + lock/home-screen widgets |
+| 06 | v0.6.0 | `06-v0.6.0-activities-break.md` | Adaptive activity management (iPhone long-press/+, Mac screen) + full-screen break overlay (+ notification fallback) |
+| 07 | v0.7.0 | `07-v0.7.0-history-reports.md` | History drill-down (day list → week bars → month heatmap) + Reports ring/pie with figures + amounts |
+| 08 | v0.8.0 | `08-v0.8.0-export.md` | Share-sheet export (CSV/HTML/PDF, per-activity option) + view-only configurable rounding (15-min default) |
+| 09 | v0.9.0 | `09-v0.9.0-sync.md` | Supabase local-first sync (RLS, LWW, soft-delete) + Sign in with Apple (iOS + macOS) |
+| 10 | v1.0.0 | `10-v1.0.0-polish.md` | App icon (both platforms), cross-platform end-to-end verification, polish, optional code-sign |
 
 Post-v1: v2.0.0 adds manual/retro session entry + editing start/end times (D3).
 
 Each plan sets `version:` in `pubspec.yaml` as its first task and ends with the
-app built and run on macOS.
+app built and run on the relevant platform(s).
+
+> **Note — v0.3.0 supersedes v0.2.0's home.** v0.2.0 shipped a dropdown-picker +
+> Start home. v0.3.0 replaces it with the focus-cards launcher (one tap on a card
+> starts that activity). The v0.2.0 `TimerEngine`, `SessionRepository`, and
+> `ActivityRepository` carry over unchanged; only the Home presentation is
+> rebuilt.
 
 ---
 
 ## UI/UX + platform decisions (2026-11-01, from the design deck)
 
 Decided interactively with Alex via the A/B/C design-deck Artifact. These
-**supersede** earlier assumptions where they conflict; plans 03–07 below still
-describe the old macOS-only shape and must be revised to match (see Follow-ups).
+**supersede** earlier assumptions where they conflict. They are now encoded in
+the `2026-11-02-cross-platform-redesign-design.md` spec and in the rewritten
+plans 03–10 above (the Follow-ups below are done).
 
 - **Platform (deck R0 = C):** cross-platform — **iPhone + Mac from one Flutter
   codebase**, touch-first UI that scales. No longer macOS-only. ⚠️ This
@@ -50,14 +60,13 @@ describe the old macOS-only shape and must be revised to match (see Follow-ups).
 - **Visual language:** iOS system colors (blue #0A84FF, green, red) over the
   existing `AppColors` tokens; big touch targets throughout.
 
-### Follow-ups (not yet planned)
-1. Update project `CLAUDE.md`: macOS-only → cross-platform (iPhone + Mac).
-2. Write a short cross-platform design spec before rewriting plans 03–07
-   (iOS has no menu bar; quick-start differs per platform; packaging/entitlements
-   differ). Then revise: 03 (menu bar → platform-adaptive shell + shortcut/
-   hotkey quick-start), 04–07 as needed.
-3. Rework the Home UI toward the focus-cards launcher (supersedes the v0.2.0
-   dropdown + Start picker).
+### Follow-ups
+1. ~~Write a cross-platform design spec~~ — done: `2026-11-02-cross-platform-redesign-design.md`.
+2. ~~Rewrite plans 03–07 (+ add 08–10) to the cross-platform breakdown~~ — done (see table above).
+3. ~~Rework Home toward the focus-cards launcher~~ — planned in v0.3.0 (supersedes v0.2.0 dropdown).
+4. **Still open:** update the project `CLAUDE.md` "macOS desktop target only in v1"
+   constraint to cross-platform (iPhone + Mac) — the spec already supersedes it,
+   but the `CLAUDE.md` line should be reconciled separately.
 
 ## Quick-start & activity decisions (2026-11-02, deck 2)
 
