@@ -5,8 +5,10 @@ and Mac** from one Flutter/Dart codebase. It records work sessions tagged by
 activity/client, reminds you to take breaks, and exports clean reports. The
 guiding goal: radically simple and fast — big buttons, one tap/one key to start,
 no confirmation; quick-start via a global hotkey on Mac and a shortcut (Action
-button / widgets / Siri) on iPhone. No cloud, no account, no network — data lives
-in a local SQLite file whose folder the user chooses. Architecture mirrors the
+button / widgets / Siri) on iPhone. **Local-first**: data lives in a local SQLite
+file (folder user-chosen on Mac) and the app works fully offline; it quietly
+syncs the user's own data between their devices via their **Supabase** backend
+(Sign in with Apple), single-user, no third-party sharing. Architecture mirrors the
 `datewatch` Flutter app (feature-first `lib/core` + `lib/feature/*`, `provider`,
 `go_router`, token-based `AppColors` + `buildAppTheme`). The UI is touch-first and
 platform-adaptive (iPhone tiles / Mac full-width bars + menu bar).
@@ -37,7 +39,10 @@ global instructions in `~/.claude/CLAUDE.md`.
 
 ## Constraints
 
-- Cross-platform targets: iPhone (iOS) and Mac (macOS) from one codebase; never
-  add Firebase/http/network packages.
+- Cross-platform targets: iPhone (iOS) and Mac (macOS) from one codebase.
+  Networking is limited to the user's own Supabase project for sync
+  (`supabase_flutter`); no Firebase, no analytics/tracking, no other network calls.
+- Local-first: local SQLite is the source of truth; the app must work fully
+  offline and sync is a background extra (never blocks start/stop).
 - Never lose the exact recorded time — rounding is a view only.
 - App version lives in `pubspec.yaml` as `version: x.y.z+build`.
