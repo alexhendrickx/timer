@@ -1,11 +1,15 @@
 # Project instructions — timer
 
-A lightweight, **fully on-device** macOS time tracker (Flutter/Dart). It records
-work sessions tagged by activity/client, lives in the menu bar, reminds you to
-take breaks, and exports clean reports. No cloud, no account, no network — data
-lives in a local SQLite file whose folder the user chooses. Architecture mirrors
-the `datewatch` Flutter app (feature-first `lib/core` + `lib/feature/*`,
-`provider`, `go_router`, token-based `AppColors` + `buildAppTheme`).
+A lightweight, **fully on-device**, **cross-platform** time tracker for **iPhone
+and Mac** from one Flutter/Dart codebase. It records work sessions tagged by
+activity/client, reminds you to take breaks, and exports clean reports. The
+guiding goal: radically simple and fast — big buttons, one tap/one key to start,
+no confirmation; quick-start via a global hotkey on Mac and a shortcut (Action
+button / widgets / Siri) on iPhone. No cloud, no account, no network — data lives
+in a local SQLite file whose folder the user chooses. Architecture mirrors the
+`datewatch` Flutter app (feature-first `lib/core` + `lib/feature/*`, `provider`,
+`go_router`, token-based `AppColors` + `buildAppTheme`). The UI is touch-first and
+platform-adaptive (iPhone tiles / Mac full-width bars + menu bar).
 
 Design: `docs/superpowers/specs/2026-10-31-local-time-tracker-design.md`.
 Build plans: `.claude/state/plans/` (one per app version, run in order).
@@ -33,6 +37,7 @@ global instructions in `~/.claude/CLAUDE.md`.
 
 ## Constraints
 
-- macOS desktop target only in v1; never add Firebase/http/network packages.
+- Cross-platform targets: iPhone (iOS) and Mac (macOS) from one codebase; never
+  add Firebase/http/network packages.
 - Never lose the exact recorded time — rounding is a view only.
 - App version lives in `pubspec.yaml` as `version: x.y.z+build`.
