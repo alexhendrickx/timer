@@ -39,6 +39,17 @@ class WindowController with WindowListener {
   /// Hides the popover window (app keeps running in the menu bar).
   Future<void> hidePopover() => windowManager.hide();
 
+  /// Left-click behaviour: hide the popover if it's the visible face, else show
+  /// it. (Showing from the main window swaps to the popover.)
+  Future<void> togglePopover() async {
+    final visible = await windowManager.isVisible();
+    if (visible && mode.value == AppWindowMode.popover) {
+      await hidePopover();
+    } else {
+      await showPopover();
+    }
+  }
+
   /// Shows the full main window: titled, centered, not always-on-top.
   Future<void> showMainWindow() async {
     mode.value = AppWindowMode.main;
