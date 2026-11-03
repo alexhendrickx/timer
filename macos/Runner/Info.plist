@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Menu-bar behaviour (v0.3.0): the app shows a top-right status item via
+	     tray_manager AND keeps a normal Dock icon so it stays launchable via
+	     ⌘+Space (Spotlight). We therefore deliberately do NOT set
+	     LSUIElement=1 (which would hide the Dock icon / make it accessory-only).
+	     Closing the main window hides it rather than quitting; the app lives on
+	     in the menu bar until "Quit" is chosen (wired in main.dart). -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
