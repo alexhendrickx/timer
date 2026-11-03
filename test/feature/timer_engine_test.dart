@@ -102,6 +102,20 @@ void main() {
     engine.dispose();
   });
 
+  test('currentSessionId tracks the running then just-stopped session',
+      () async {
+    final engine = TimerEngine(repo, now: () => DateTime(2026, 10, 31, 9, 0));
+    expect(engine.currentSessionId, isNull);
+    await engine.start(a);
+    final id = engine.running!.id;
+    expect(engine.currentSessionId, id);
+    await engine.stop();
+    expect(engine.running, isNull);
+    // The just-stopped session stays targetable so a note can still be added.
+    expect(engine.currentSessionId, id);
+    engine.dispose();
+  });
+
   test('resumeKeepRunning keeps the open session running', () async {
     var clock = DateTime(2026, 10, 31, 17, 0);
     final engine = TimerEngine(repo, now: () => clock);

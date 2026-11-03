@@ -51,6 +51,15 @@ class SessionRepository {
     ));
   }
 
+  /// Sets the free-text [note] on a session (editing notes is allowed in v1).
+  Future<void> setNote(int sessionId, String? note) {
+    return (_db.update(_db.sessions)..where((s) => s.id.equals(sessionId)))
+        .write(SessionsCompanion(
+      note: Value(note),
+      updatedAt: Value(DateTime.now()),
+    ));
+  }
+
   /// The currently open session (endTime null), if any.
   Future<Session?> openSession() {
     return (_db.select(_db.sessions)..where((s) => s.endTime.isNull()))
