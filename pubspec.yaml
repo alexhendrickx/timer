@@ -62,6 +62,11 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.14.2
   share_plus: ^13.3.1
+  # Pinned: 4.11.0 (pdf/printing's default resolution) fails to compile
+  # against the resolved archive 4.0.9 (ZLibDecoder.decodeLazy missing).
+  # 4.1.0 is the oldest version pdf/printing's constraints allow and
+  # compiles cleanly against archive 4.0.9.
+  image: 4.1.0
 
 dev_dependencies:
   flutter_test:
