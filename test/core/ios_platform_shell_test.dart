@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:timer/core/platform/ios/ios_platform_shell.dart';
 import 'package:timer/core/routing/app_router.dart';
 
