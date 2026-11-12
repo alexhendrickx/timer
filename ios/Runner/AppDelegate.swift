@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -27,14 +28,20 @@ import UIKit
         binaryMessenger: controller.binaryMessenger
       )
       appGroupChannel.setMethodCallHandler { call, result in
-        guard call.method == "containerPath" else {
+        switch call.method {
+        case "containerPath":
+          let url = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: AppDelegate.appGroupId
+          )
+          result(url?.path)
+        case "reloadWidgets":
+          if #available(iOS 14.0, *) {
+            WidgetCenter.shared.reloadAllTimelines()
+          }
+          result(nil)
+        default:
           result(FlutterMethodNotImplemented)
-          return
         }
-        let url = FileManager.default.containerURL(
-          forSecurityApplicationGroupIdentifier: AppDelegate.appGroupId
-        )
-        result(url?.path)
       }
 
       let deepLinkChannel = FlutterMethodChannel(

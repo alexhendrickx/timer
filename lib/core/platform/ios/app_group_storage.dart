@@ -13,14 +13,16 @@ class AppGroupStorage {
   static const _channel = MethodChannel('timer/app_group');
   static const _fileName = 'activity_snapshot.json';
 
-  /// Writes [json] to `<app-group container>/activity_snapshot.json`.
-  /// No-op (does not throw) if the native side can't resolve the
-  /// container — e.g. running on a build without the entitlement, or on
-  /// a platform other than iOS.
+  /// Writes [json] to `<app-group container>/activity_snapshot.json` and asks
+  /// the native side to reload the WidgetKit timelines so the widget picks up
+  /// the new snapshot. No-op (does not throw) if the native side can't
+  /// resolve the container — e.g. running on a build without the entitlement,
+  /// or on a platform other than iOS.
   static Future<void> write(String json) async {
     final containerPath = await _channel.invokeMethod<String>('containerPath');
     if (containerPath == null) return;
     final file = File('$containerPath/$_fileName');
     await file.writeAsString(json);
+    await _channel.invokeMethod<void>('reloadWidgets');
   }
 }

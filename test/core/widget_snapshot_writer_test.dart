@@ -64,4 +64,23 @@ void main() {
 
     expect(jsonDecode(written!), isEmpty);
   });
+
+  test('start() re-syncs when activities change', () async {
+    final writes = <String>[];
+    final writer = WidgetSnapshotWriter(
+      activityRepository: activities,
+      sessionRepository: sessions,
+      writeSnapshot: (json) async => writes.add(json),
+    );
+
+    writer.start();
+    addTearDown(writer.dispose);
+    await activities.create(name: 'Client A');
+    // Let the watchActive() stream deliver the change to the listener.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(writes, isNotEmpty);
+    final last = jsonDecode(writes.last) as List;
+    expect(last.any((e) => e['name'] == 'Client A'), isTrue);
+  });
 }

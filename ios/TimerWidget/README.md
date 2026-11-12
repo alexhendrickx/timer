@@ -10,9 +10,12 @@ that validates a hand-written target the way the GUI's template does).
 
 ## What's done (headless, in this repo)
 - `WidgetSnapshotWriter` (Dart) writes the JSON snapshot these Swift files
-  read — tested in `test/core/widget_snapshot_writer_test.dart`.
+  read, and is started in `main.dart` (iOS) to re-write it whenever
+  activities or today's totals change — tested in
+  `test/core/widget_snapshot_writer_test.dart`.
 - `AppGroupStorage` (Dart) + the `timer/app_group` method channel in
-  `AppDelegate.swift` resolve the app-group container path.
+  `AppDelegate.swift` resolve the app-group container path and reload the
+  WidgetKit timelines after each write.
 - The `group.com.alexhendrickx.timer` app-group entitlement on the `Runner`
   target, confirmed to build and auto-sign for both the simulator and the
   connected physical iPhone.

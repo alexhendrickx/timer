@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'core/platform/ios/app_group_storage.dart';
 import 'core/platform/ios/deep_link_listener.dart';
 import 'core/platform/ios/ios_platform_shell.dart';
 import 'core/platform/ios/quick_start_intent_handler.dart';
+import 'core/platform/ios/widget_snapshot_writer.dart';
 import 'core/platform/mac/hotkey_controller.dart';
 import 'core/platform/mac/mac_platform_shell.dart';
 import 'core/platform/mac/mac_routes.dart';
@@ -116,6 +118,15 @@ Future<void> main() async {
       activityRepository: activityRepository,
     );
     deepLinkListener = DeepLinkListener(intentHandler);
+
+    // Keep the home-/lock-screen widget's shared snapshot current: write it
+    // (and reload the WidgetKit timelines) whenever activities or today's
+    // totals change. Lives for the app's lifetime, so it is never disposed.
+    WidgetSnapshotWriter(
+      activityRepository: activityRepository,
+      sessionRepository: sessionRepository,
+      writeSnapshot: AppGroupStorage.write,
+    ).start();
   }
 
   runApp(TimerApp(
