@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:window_manager/window_manager.dart';
 
 import 'core/platform/ios/app_group_storage.dart';
@@ -26,10 +28,19 @@ import 'feature/activities/data/activity_repository.dart';
 import 'feature/history/data/history_repository.dart';
 import 'feature/settings/data/reminder_settings.dart';
 import 'feature/settings/data/rounding_settings.dart';
+import 'feature/sync/service/auth_service.dart';
+import 'feature/sync/service/sync_engine.dart';
+import 'feature/sync/service/supabase_sync_port.dart';
 import 'feature/tracker/data/session_repository.dart';
 import 'feature/tracker/service/reminder_scheduler.dart';
 import 'feature/tracker/service/start_coordinator.dart';
 import 'feature/tracker/service/timer_engine.dart';
+
+/// Supplied at build/run time via `--dart-define` (see
+/// docs/superpowers/sync/supabase-setup.md); both default to empty, which
+/// leaves sync disabled and the app purely local (spec Sync — Signed out).
+const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,8 +49,43 @@ Future<void> main() async {
   final dbPath = await storage.resolveDbPath();
   final database = openAppDatabase(dbPath);
 
-  final activityRepository = ActivityRepository(database);
-  final sessionRepository = SessionRepository(database);
+  // Sync is entirely optional: with no --dart-define config, these stay
+  // null and every repository/UI seam below degrades to exactly v0.8 —
+  // zero network calls (spec Sync — Signed out).
+  AuthService? authService;
+  SyncEngine? syncEngine;
+  if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
+    await supabase.Supabase.initialize(
+      url: _supabaseUrl,
+      publishableKey: _supabaseAnonKey,
+    );
+    final client = supabase.Supabase.instance.client;
+    authService = AuthService(backend: SupabaseAuthBackend(client));
+    syncEngine = SyncEngine(
+      db: database,
+      auth: authService,
+      port: SupabaseSyncPort(client),
+    );
+    // A successful sign-in (or sign-out, a safe no-op) kicks a sync right
+    // away rather than waiting for the next debounced local change.
+    authService.authState.listen((signedIn) {
+      if (signedIn) syncEngine!.syncNow();
+    });
+    Connectivity().onConnectivityChanged.listen((results) {
+      if (results.any((r) => r != ConnectivityResult.none)) {
+        syncEngine!.onReconnect();
+      }
+    });
+  }
+
+  final activityRepository = ActivityRepository(
+    database,
+    onWrite: syncEngine?.notifyLocalChange,
+  );
+  final sessionRepository = SessionRepository(
+    database,
+    onWrite: syncEngine?.notifyLocalChange,
+  );
   final historyRepository = HistoryRepository(database);
   final timerEngine = TimerEngine(sessionRepository);
   // Built once and shared (not re-created per rebuild) so its in-flight
@@ -226,6 +272,7 @@ Future<void> main() async {
     shell: shell,
     router: router,
     windowController: windowController,
+    authService: authService,
   ));
 
   // After the first frame — i.e. after DI above and after HomeScreen's own
@@ -256,6 +303,7 @@ class TimerApp extends StatefulWidget {
     PlatformShell? shell,
     GoRouter? router,
     WindowController? windowController,
+    AuthService? authService,
   }) {
     final settings = reminderSettings ?? ReminderSettings();
     return TimerApp._(
@@ -279,6 +327,7 @@ class TimerApp extends StatefulWidget {
       shell: shell ?? NoopPlatformShell(),
       router: router ?? buildAppRouter(),
       windowController: windowController,
+      authService: authService,
     );
   }
 
@@ -298,6 +347,7 @@ class TimerApp extends StatefulWidget {
     required this.shell,
     required this.router,
     this.windowController,
+    this.authService,
   });
 
   final StorageLocationService storage;
@@ -321,6 +371,10 @@ class TimerApp extends StatefulWidget {
   /// Only set on macOS — drives which face (main / popover / picker) the
   /// single native window shows.
   final WindowController? windowController;
+
+  /// Null when Supabase wasn't configured at launch — sync is then
+  /// entirely absent (spec Sync — Signed out).
+  final AuthService? authService;
 
   @override
   State<TimerApp> createState() => _TimerAppState();
@@ -375,6 +429,9 @@ class _TimerAppState extends State<TimerApp> with WidgetsBindingObserver {
         Provider<PlatformShell>.value(value: widget.shell),
         if (widget.windowController != null)
           Provider<WindowController>.value(value: widget.windowController!),
+        // Null when Supabase wasn't configured — SettingsScreen hides the
+        // Sync section entirely in that case (spec Sync — Signed out).
+        ChangeNotifierProvider<AuthService?>.value(value: widget.authService),
       ],
       child: MaterialApp.router(
         title: 'Timer',

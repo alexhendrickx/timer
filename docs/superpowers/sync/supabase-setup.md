@@ -81,8 +81,11 @@ repo):**
    directly for a Supabase session via `signInWithIdToken`.
 3. In Xcode, add the **Sign in with Apple** capability to both the
    `Runner` (iOS) and `Runner` (macOS) targets — this writes the
-   entitlement into `ios/Runner/Runner.entitlements` and
-   `macos/Runner/*.entitlements`.
+   `com.apple.developer.applesignin` entitlement into
+   `ios/Runner/Runner.entitlements` and `macos/Runner/*.entitlements`.
+   (Already done in this repo: macOS's `com.apple.security.network.client`
+   entitlement, needed for the sandboxed app to reach Supabase at all —
+   it only had `network.server` before v0.9.0.)
 
 **Validation flag outcome (Task 1, Step 2):** the Dart-side flow
 (`AuthService.signInWithApple`) is implemented identically for iOS and

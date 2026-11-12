@@ -17,9 +17,14 @@ class ActivityHasSessionsError implements Exception {
 /// Reads and writes activities. Activities are archived, never hard-deleted
 /// when they have sessions (spec D7); the picker shows only active ones.
 class ActivityRepository {
-  ActivityRepository(this._db);
+  ActivityRepository(this._db, {void Function()? onWrite})
+      : _onWrite = onWrite ?? (() {});
 
   final AppDatabase _db;
+
+  /// Called after create/update/archive/delete — `main.dart` wires this to
+  /// `SyncEngine.notifyLocalChange()` (spec Sync — Direction & timing).
+  final void Function() _onWrite;
 
   /// True when [id] has no sessions and can be hard-deleted.
   Future<bool> canDelete(int id) async {
@@ -50,6 +55,7 @@ class ActivityRepository {
         dirty: const Value(true),
       ),
     );
+    _onWrite();
   }
 
   /// Inserts a new active activity and returns its id.
@@ -58,8 +64,8 @@ class ActivityRepository {
     int? color,
     double? hourlyRate,
     String? currencyLabel,
-  }) {
-    return _db.into(_db.activities).insert(
+  }) async {
+    final id = await _db.into(_db.activities).insert(
           ActivitiesCompanion.insert(
             name: name,
             color: Value(color),
@@ -68,25 +74,29 @@ class ActivityRepository {
             createdAt: DateTime.now(),
           ),
         );
+    _onWrite();
+    return id;
   }
 
-  Future<void> update(Activity activity) {
+  Future<void> update(Activity activity) async {
     final now = DateTime.now();
-    return _db
+    await _db
         .update(_db.activities)
         .replace(activity.copyWith(updatedAt: now, dirty: true));
+    _onWrite();
   }
 
   /// Hides an activity from the picker; its sessions and totals are preserved.
-  Future<void> archive(int id) {
+  Future<void> archive(int id) async {
     final now = DateTime.now();
-    return (_db.update(_db.activities)..where((a) => a.id.equals(id))).write(
+    await (_db.update(_db.activities)..where((a) => a.id.equals(id))).write(
       ActivitiesCompanion(
         archived: const Value(true),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
     );
+    _onWrite();
   }
 
   /// Active (non-archived) activities, name-sorted.
