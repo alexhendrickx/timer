@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/platform/platform_shell.dart';
 import '../../../core/services/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../activities/data/activity_repository.dart';
+import '../../activities/presentation/widgets/activity_edit_sheet.dart';
 import '../data/session_repository.dart';
 import '../service/start_coordinator.dart';
 import '../service/timer_engine.dart';
@@ -136,16 +138,31 @@ class _HomeScreenState extends State<HomeScreen> {
     final coordinator = context.read<StartCoordinator>();
     final activityRepo = context.read<ActivityRepository>();
     final sessionRepo = context.read<SessionRepository>();
+    // Mac has a dedicated Activities screen (reachable here + the tray
+    // menu); iPhone manages activities in place via long-press + "+" on the
+    // cards below, so it skips the list view entirely.
+    final hasMenuBar = context.read<PlatformShell>().hasMenuBar;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Timer'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.list_alt),
-            tooltip: 'Activities',
-            onPressed: () => context.go('/activities'),
-          ),
+          if (hasMenuBar)
+            IconButton(
+              icon: const Icon(Icons.list_alt),
+              tooltip: 'Activities',
+              onPressed: () => context.go('/activities'),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Add activity',
+              onPressed: () => ActivityEditSheet.show(
+                context,
+                repo: activityRepo,
+                existing: null,
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Settings',
@@ -199,6 +216,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     fraction: ringFraction(seconds, totalToday),
                     onTap: () =>
                         _onTapCard(coordinator, activityRepo, activity.id),
+                    onLongPress: hasMenuBar
+                        ? null
+                        : () => ActivityEditSheet.show(
+                              context,
+                              repo: activityRepo,
+                              existing: activity,
+                            ),
                   );
                 },
               );

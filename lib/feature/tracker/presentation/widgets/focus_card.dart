@@ -21,12 +21,16 @@ class FocusCard extends StatelessWidget {
     required this.todaySeconds,
     required this.fraction,
     required this.onTap,
+    this.onLongPress,
   });
 
   final Activity activity;
   final int todaySeconds;
   final double fraction;
   final VoidCallback onTap;
+
+  /// Long-press affordance (iPhone: opens this activity's edit sheet).
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +40,7 @@ class FocusCard extends StatelessWidget {
       color: AppColors.surface,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),

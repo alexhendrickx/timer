@@ -23,6 +23,7 @@ class TrayController with TrayListener {
     required this.onIconClick,
     required this.onStartStop,
     required this.onOpenWindow,
+    required this.onActivities,
     required this.onQuit,
     this.iconPath,
   });
@@ -35,6 +36,9 @@ class TrayController with TrayListener {
 
   /// "Open window" menu item.
   final VoidCallback onOpenWindow;
+
+  /// "Activities…" menu item (opens the main window on the Activities screen).
+  final VoidCallback onActivities;
 
   /// "Quit" menu item.
   final VoidCallback onQuit;
@@ -109,6 +113,7 @@ class TrayController with TrayListener {
     await trayManager.setContextMenu(Menu(items: [
       MenuItem(key: 'start_stop', label: running ? 'Stop timer' : 'Start timer'),
       MenuItem(key: 'open_window', label: 'Open window'),
+      MenuItem(key: 'activities', label: 'Activities…'),
       MenuItem.separator(),
       MenuItem(key: 'quit', label: 'Quit Timer'),
     ]));
@@ -127,6 +132,8 @@ class TrayController with TrayListener {
         onStartStop();
       case 'open_window':
         onOpenWindow();
+      case 'activities':
+        onActivities();
       case 'quit':
         onQuit();
     }

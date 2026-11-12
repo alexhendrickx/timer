@@ -45,6 +45,9 @@ Future<void> main() async {
   // by platform — screens never do.
   PlatformShell shell = NoopPlatformShell();
   WindowController? windowController;
+  // Assigned once buildAppRouter runs below; the tray's "Activities…" item
+  // (Mac-only) closes over this to navigate after raising the main window.
+  late final GoRouter router;
 
   if (Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -62,6 +65,10 @@ Future<void> main() async {
         }
       },
       onOpenWindow: wc.showMainWindow,
+      onActivities: () async {
+        await wc.showMainWindow();
+        router.go('/activities');
+      },
       onQuit: () async {
         await windowManager.setPreventClose(false);
         await windowManager.destroy();
@@ -105,7 +112,7 @@ Future<void> main() async {
 
   // The seam itself: core routing (app_router.dart) carries no platform-UI
   // imports; macOS is the only platform that registers extra routes today.
-  final router = buildAppRouter(
+  router = buildAppRouter(
     platformRoutes: windowController != null ? macRoutes(windowController) : const [],
   );
 
