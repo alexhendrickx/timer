@@ -28,5 +28,12 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!--
+	  v0.4.0: deliberately NOT setting LSUIElement (which would hide the Dock
+	  icon and make this a pure background/menu-bar-only app). Spec requires
+	  the app stay launchable via Spotlight/Dock while also living in the
+	  menu bar, so it keeps the default "regular" activation policy and Dock
+	  icon; the menu-bar presence (tray_manager) is additive, not exclusive.
+	-->
 </dict>
 </plist>
