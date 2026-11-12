@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'core/platform/ios/deep_link_listener.dart';
+import 'core/platform/ios/ios_platform_shell.dart';
+import 'core/platform/ios/quick_start_intent_handler.dart';
 import 'core/platform/mac/hotkey_controller.dart';
 import 'core/platform/mac/mac_platform_shell.dart';
 import 'core/platform/mac/mac_routes.dart';
@@ -30,6 +33,10 @@ Future<void> main() async {
   final activityRepository = ActivityRepository(database);
   final sessionRepository = SessionRepository(database);
   final timerEngine = TimerEngine(sessionRepository);
+  // Built once and shared (not re-created per rebuild) so its in-flight
+  // start guard (D1) actually dedups races — the iOS intent handler below
+  // and the UI screens must share this one instance.
+  final startCoordinator = StartCoordinator(timerEngine);
 
   // NoopPlatformShell is the default (and the iOS placeholder until v0.5);
   // macOS swaps in the real shell below. This is the one seam that branches
@@ -100,16 +107,38 @@ Future<void> main() async {
     platformRoutes: windowController != null ? macRoutes(windowController) : const [],
   );
 
+  DeepLinkListener? deepLinkListener;
+  if (Platform.isIOS) {
+    shell = IosPlatformShell(router);
+    final intentHandler = QuickStartIntentHandler(
+      router: router,
+      coordinator: startCoordinator,
+      activityRepository: activityRepository,
+    );
+    deepLinkListener = DeepLinkListener(intentHandler);
+  }
+
   runApp(TimerApp(
     storage: storage,
     database: database,
     activityRepository: activityRepository,
     sessionRepository: sessionRepository,
     timerEngine: timerEngine,
+    startCoordinator: startCoordinator,
     shell: shell,
     router: router,
     windowController: windowController,
   ));
+
+  // After the first frame — i.e. after DI above and after HomeScreen's own
+  // D2 resume-detection has started — so a cold launch from the Action
+  // button/Siri/a widget lands on the picker/running screen rather than a
+  // blank first frame. (Review Focus: this is a reasonable ordering, not a
+  // hard guarantee against racing a pending D2 resume dialog — validated
+  // manually on-device, see the Task 5 commit message.)
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    deepLinkListener?.processInitialLink();
+  });
 }
 
 class TimerApp extends StatefulWidget {
@@ -120,10 +149,12 @@ class TimerApp extends StatefulWidget {
     required this.activityRepository,
     required this.sessionRepository,
     required this.timerEngine,
+    StartCoordinator? startCoordinator,
     PlatformShell? shell,
     GoRouter? router,
     this.windowController,
-  })  : shell = shell ?? NoopPlatformShell(),
+  })  : startCoordinator = startCoordinator ?? StartCoordinator(timerEngine),
+        shell = shell ?? NoopPlatformShell(),
         router = router ?? buildAppRouter();
 
   final StorageLocationService storage;
@@ -131,6 +162,7 @@ class TimerApp extends StatefulWidget {
   final ActivityRepository activityRepository;
   final SessionRepository sessionRepository;
   final TimerEngine timerEngine;
+  final StartCoordinator startCoordinator;
   final PlatformShell shell;
   final GoRouter router;
 
@@ -176,9 +208,7 @@ class _TimerAppState extends State<TimerApp> {
         Provider<ActivityRepository>.value(value: widget.activityRepository),
         Provider<SessionRepository>.value(value: widget.sessionRepository),
         ChangeNotifierProvider<TimerEngine>.value(value: widget.timerEngine),
-        Provider<StartCoordinator>.value(
-          value: StartCoordinator(widget.timerEngine),
-        ),
+        Provider<StartCoordinator>.value(value: widget.startCoordinator),
         Provider<PlatformShell>.value(value: widget.shell),
         if (widget.windowController != null)
           Provider<WindowController>.value(value: widget.windowController!),
