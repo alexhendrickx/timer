@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/services/database/app_database.dart';
@@ -76,61 +77,69 @@ class _QuickStartPickerState extends State<QuickStartPicker> {
   @override
   Widget build(BuildContext context) {
     final repo = context.read<ActivityRepository>();
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _queryController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Start tracking…',
-                border: InputBorder.none,
-                prefixIcon: Icon(Icons.search),
+    // Esc dismisses the always-on-top overlay without starting anything —
+    // the baseline exit for a Spotlight-style picker. The autofocus field
+    // below holds focus, so the shortcut lives above it in the focus tree.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): widget.onDismiss,
+      },
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _queryController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Start tracking…',
+                  border: InputBorder.none,
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onChanged: (text) => setState(() => _query = text),
               ),
-              onChanged: (text) => setState(() => _query = text),
-            ),
-            const Divider(height: 1),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: StreamBuilder<List<Activity>>(
-                stream: repo.watchActive(),
-                builder: (context, snapshot) {
-                  final activities = snapshot.data ?? const [];
-                  final matching =
-                      filterActivityNames(
-                    activities.map((a) => a.name).toList(),
-                    _query,
-                  ).toSet();
-                  final visible =
-                      activities.where((a) => matching.contains(a.name)).toList();
-                  if (visible.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No matching activity'),
-                    );
-                  }
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: visible.length,
-                    itemBuilder: (context, index) {
-                      final activity = visible[index];
-                      return ListTile(
-                        dense: true,
-                        title: Text(activity.name),
-                        onTap: () => _onPick(activity),
+              const Divider(height: 1),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: StreamBuilder<List<Activity>>(
+                  stream: repo.watchActive(),
+                  builder: (context, snapshot) {
+                    final activities = snapshot.data ?? const [];
+                    final matching = filterActivityNames(
+                      activities.map((a) => a.name).toList(),
+                      _query,
+                    ).toSet();
+                    final visible = activities
+                        .where((a) => matching.contains(a.name))
+                        .toList();
+                    if (visible.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No matching activity'),
                       );
-                    },
-                  );
-                },
+                    }
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) {
+                        final activity = visible[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(activity.name),
+                          onTap: () => _onPick(activity),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
