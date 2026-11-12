@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.8.0+8
+version: 0.9.0+9
 
 environment:
   sdk: ^3.10.4
@@ -67,6 +67,13 @@ dependencies:
   # 4.1.0 is the oldest version pdf/printing's constraints allow and
   # compiles cleanly against archive 4.0.9.
   image: 4.1.0
+  # Optional local-first sync layer: Alex's own Supabase project behind
+  # Sign in with Apple. Networking is limited to that one project — no
+  # other cloud, and the app is fully usable signed out (unchanged v0.8).
+  supabase_flutter: ^2.10.3
+  sign_in_with_apple: ^7.0.1
+  uuid: ^4.5.1
+  connectivity_plus: ^6.1.5
 
 dev_dependencies:
   flutter_test:
