@@ -1,11 +1,13 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core/platform/mac/hotkey_controller.dart';
 import 'core/platform/mac/mac_platform_shell.dart';
+import 'core/platform/mac/mac_routes.dart';
 import 'core/platform/mac/tray_controller.dart';
 import 'core/platform/mac/window_controller.dart';
 import 'core/platform/platform_shell.dart';
@@ -92,6 +94,12 @@ Future<void> main() async {
     windowController = wc;
   }
 
+  // The seam itself: core routing (app_router.dart) carries no platform-UI
+  // imports; macOS is the only platform that registers extra routes today.
+  final router = buildAppRouter(
+    platformRoutes: windowController != null ? macRoutes(windowController) : const [],
+  );
+
   runApp(TimerApp(
     storage: storage,
     database: database,
@@ -99,6 +107,7 @@ Future<void> main() async {
     sessionRepository: sessionRepository,
     timerEngine: timerEngine,
     shell: shell,
+    router: router,
     windowController: windowController,
   ));
 }
@@ -112,8 +121,10 @@ class TimerApp extends StatefulWidget {
     required this.sessionRepository,
     required this.timerEngine,
     PlatformShell? shell,
+    GoRouter? router,
     this.windowController,
-  }) : shell = shell ?? NoopPlatformShell();
+  })  : shell = shell ?? NoopPlatformShell(),
+        router = router ?? buildAppRouter();
 
   final StorageLocationService storage;
   final AppDatabase database;
@@ -121,6 +132,7 @@ class TimerApp extends StatefulWidget {
   final SessionRepository sessionRepository;
   final TimerEngine timerEngine;
   final PlatformShell shell;
+  final GoRouter router;
 
   /// Only set on macOS — drives which face (main / popover / picker) the
   /// single native window shows.
@@ -147,11 +159,11 @@ class _TimerAppState extends State<TimerApp> {
   void _onModeChanged() {
     switch (widget.windowController!.mode.value) {
       case AppWindowMode.popover:
-        appRouter.go('/popover');
+        widget.router.go('/popover');
       case AppWindowMode.picker:
-        appRouter.go('/picker');
+        widget.router.go('/picker');
       case AppWindowMode.main:
-        appRouter.go('/');
+        widget.router.go('/');
     }
   }
 
@@ -175,7 +187,7 @@ class _TimerAppState extends State<TimerApp> {
         title: 'Timer',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
-        routerConfig: appRouter,
+        routerConfig: widget.router,
       ),
     );
   }
