@@ -35,22 +35,30 @@ class _FakeAuthBackend implements SyncAuthBackend {
   }
 }
 
-/// Fake [SyncPort] — records upserts, and can be made to throw to
-/// simulate being offline.
+/// Fake [SyncPort] that round-trips every row through the REAL JSON
+/// serialization (`syncRowToJson`/`syncRowFromJson`) — so a field-key or
+/// missing-column bug in the mapping surfaces here, not only against a
+/// live Supabase project (reviewer C1/C2). Records upserts and can throw
+/// to simulate being offline.
 class _FakeSyncPort implements SyncPort {
-  final List<SyncRow> upserts = [];
+  /// The raw JSON payloads sent up — exactly what Supabase would receive.
+  final List<Map<String, dynamic>> upsertedJson = [];
   List<SyncRow> remote = [];
   bool throwOnUpsert = false;
+
+  List<SyncRow> get upserts =>
+      upsertedJson.map(syncRowFromJson).toList();
 
   @override
   Future<void> upsert(String table, List<SyncRow> rows) async {
     if (throwOnUpsert) throw Exception('offline');
-    upserts.addAll(rows);
+    upsertedJson.addAll(rows.map(syncRowToJson));
   }
 
   @override
   Future<List<SyncRow>> fetchSince(DateTime since, String table) async {
-    return remote;
+    // Round-trip the staged rows through serialization, mimicking the wire.
+    return remote.map((r) => syncRowFromJson(syncRowToJson(r))).toList();
   }
 }
 
@@ -107,6 +115,42 @@ void main() {
     final matches =
         (await db.select(db.activities).get()).where((a) => a.uid == 'r1');
     expect(matches.length, 1);
+  });
+
+  test('pull fully overwrites an existing activity when remote wins', () async {
+    await backend.signInWithIdToken(idToken: 'tok');
+    final id = await activities.create(
+      name: 'Local',
+      color: 1,
+      hourlyRate: 10,
+      currencyLabel: 'EUR',
+    );
+    final local =
+        await (db.select(db.activities)..where((a) => a.id.equals(id)))
+            .getSingle();
+    port.remote = [
+      SyncRow(
+        uid: local.uid,
+        updatedAt: DateTime.now().add(const Duration(days: 1)),
+        fields: {
+          'name': 'Remote',
+          'archived': false,
+          'color': 2,
+          'hourly_rate': 99,
+          'currency_label': 'USD',
+          'created_at': local.createdAt.toUtc().toIso8601String(),
+        },
+      ),
+    ];
+
+    await engine.syncNow();
+
+    final after = await (db.select(db.activities)..where((a) => a.id.equals(id)))
+        .getSingle();
+    expect(after.name, 'Remote');
+    expect(after.color, 2);
+    expect(after.hourlyRate, 99);
+    expect(after.currencyLabel, 'USD');
   });
 
   test('offline writes queue and drain on reconnect', () async {

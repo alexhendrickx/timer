@@ -66,25 +66,12 @@ class SyncEngine {
 
   // ---- Activities -----------------------------------------------------
 
-  SyncRow _activityToRow(Activity a) => SyncRow(
-        uid: a.uid,
-        updatedAt: a.updatedAt,
-        deletedAt: a.deletedAt,
-        fields: {
-          'name': a.name,
-          'color': a.color,
-          'hourlyRate': a.hourlyRate,
-          'currencyLabel': a.currencyLabel,
-          'archived': a.archived,
-        },
-      );
-
   Future<void> _pushActivities() async {
     final dirty = await (_db.select(_db.activities)
           ..where((a) => a.dirty.equals(true)))
         .get();
     if (dirty.isEmpty) return;
-    await _port.upsert('activities', dirty.map(_activityToRow).toList());
+    await _port.upsert('activities', dirty.map(activityToSyncRow).toList());
     for (final a in dirty) {
       await (_db.update(_db.activities)..where((x) => x.id.equals(a.id)))
           .write(const ActivitiesCompanion(dirty: Value(false)));
@@ -97,33 +84,31 @@ class SyncEngine {
       final existing = await (_db.select(_db.activities)
             ..where((a) => a.uid.equals(remote.uid)))
           .getSingleOrNull();
-      final local = existing == null ? null : _activityToRow(existing);
+      final local = existing == null ? null : activityToSyncRow(existing);
       final action = resolve(local, remote).action;
 
       if (action == SyncAction.applyRemote) {
+        // Full overwrite — the resolver already decided the remote wins,
+        // so every column is applied, not a subset (reviewer I2).
+        final companion = ActivitiesCompanion(
+          name: Value(remote.fields['name'] as String? ?? existing?.name ?? ''),
+          color: Value((remote.fields['color'] as num?)?.toInt()),
+          hourlyRate: Value((remote.fields['hourly_rate'] as num?)?.toDouble()),
+          currencyLabel: Value(remote.fields['currency_label'] as String?),
+          archived: Value(remote.fields['archived'] as bool? ?? false),
+          deletedAt: Value(remote.deletedAt),
+          updatedAt: Value(remote.updatedAt),
+          dirty: const Value(false),
+        );
         if (existing == null) {
-          await _db.into(_db.activities).insert(ActivitiesCompanion.insert(
-                name: remote.fields['name'] as String? ?? '',
-                color: Value(remote.fields['color'] as int?),
-                hourlyRate:
-                    Value((remote.fields['hourlyRate'] as num?)?.toDouble()),
-                currencyLabel: Value(remote.fields['currencyLabel'] as String?),
-                archived: Value(remote.fields['archived'] as bool? ?? false),
-                createdAt: remote.updatedAt,
+          await _db.into(_db.activities).insert(companion.copyWith(
                 uid: Value(remote.uid),
-                updatedAt: Value(remote.updatedAt),
-                dirty: const Value(false),
+                createdAt: Value(_remoteCreatedAt(remote)),
               ));
         } else {
           await (_db.update(_db.activities)
                 ..where((a) => a.id.equals(existing.id)))
-              .write(ActivitiesCompanion(
-            name: Value(remote.fields['name'] as String? ?? existing.name),
-            archived:
-                Value(remote.fields['archived'] as bool? ?? existing.archived),
-            updatedAt: Value(remote.updatedAt),
-            dirty: const Value(false),
-          ));
+              .write(companion);
         }
       } else if (action == SyncAction.applyRemoteDelete && existing != null) {
         await (_db.update(_db.activities)
@@ -135,7 +120,9 @@ class SyncEngine {
         ));
       }
       // pushLocal / keepLocal: local already wins or matches — the push
-      // phase (above) is what moves it, not the pull.
+      // phase (above) is what moves it, not the pull. A remote tombstone
+      // with no local row resolves to applyRemoteDelete and is skipped
+      // here, so it is never resurrected as a live row (reviewer I1).
     }
   }
 
@@ -145,20 +132,7 @@ class SyncEngine {
     final activity = await (_db.select(_db.activities)
           ..where((a) => a.id.equals(s.activityId)))
         .getSingleOrNull();
-    return SyncRow(
-      uid: s.uid,
-      updatedAt: s.updatedAt,
-      deletedAt: s.deletedAt,
-      fields: {
-        'activityUid': activity?.uid,
-        'date': s.date.toIso8601String(),
-        'startTime': s.startTime.toIso8601String(),
-        'endTime': s.endTime?.toIso8601String(),
-        'durationSeconds': s.durationSeconds,
-        'note': s.note,
-        'lastSeenAt': s.lastSeenAt?.toIso8601String(),
-      },
-    );
+    return sessionToSyncRow(s, activityUid: activity?.uid);
   }
 
   Future<void> _pushSessions() async {
@@ -180,13 +154,11 @@ class SyncEngine {
       final existing = await (_db.select(_db.sessions)
             ..where((s) => s.uid.equals(remote.uid)))
           .getSingleOrNull();
-      final local = existing == null
-          ? null
-          : await _sessionToRow(existing);
+      final local = existing == null ? null : await _sessionToRow(existing);
       final action = resolve(local, remote).action;
 
       if (action == SyncAction.applyRemote) {
-        final activityUid = remote.fields['activityUid'] as String?;
+        final activityUid = remote.fields['activity_uid'] as String?;
         final activity = activityUid == null
             ? null
             : await (_db.select(_db.activities)
@@ -196,37 +168,32 @@ class SyncEngine {
         // until that activity itself has been pulled.
         if (activity == null) continue;
 
-        final startTime = DateTime.parse(remote.fields['startTime'] as String);
-        final date = DateTime.parse(remote.fields['date'] as String);
-        final endTimeStr = remote.fields['endTime'] as String?;
-        final lastSeenStr = remote.fields['lastSeenAt'] as String?;
-
+        final endTimeStr = remote.fields['end_time'] as String?;
+        final lastSeenStr = remote.fields['last_seen_at'] as String?;
+        // Full overwrite of every mutable column (reviewer I2).
+        final companion = SessionsCompanion(
+          activityId: Value(activity.id),
+          date: Value(DateTime.parse(remote.fields['date'] as String)),
+          startTime: Value(DateTime.parse(remote.fields['start_time'] as String)),
+          endTime: Value(endTimeStr == null ? null : DateTime.parse(endTimeStr)),
+          durationSeconds:
+              Value(remote.fields['duration_seconds'] as int? ?? 0),
+          note: Value(remote.fields['note'] as String?),
+          lastSeenAt:
+              Value(lastSeenStr == null ? null : DateTime.parse(lastSeenStr)),
+          deletedAt: Value(remote.deletedAt),
+          updatedAt: Value(remote.updatedAt),
+          dirty: const Value(false),
+        );
         if (existing == null) {
-          await _db.into(_db.sessions).insert(SessionsCompanion.insert(
-                activityId: activity.id,
-                date: date,
-                startTime: startTime,
-                endTime: Value(endTimeStr == null ? null : DateTime.parse(endTimeStr)),
-                durationSeconds:
-                    Value(remote.fields['durationSeconds'] as int? ?? 0),
-                note: Value(remote.fields['note'] as String?),
-                lastSeenAt:
-                    Value(lastSeenStr == null ? null : DateTime.parse(lastSeenStr)),
-                createdAt: remote.updatedAt,
-                updatedAt: remote.updatedAt,
+          await _db.into(_db.sessions).insert(companion.copyWith(
                 uid: Value(remote.uid),
-                dirty: const Value(false),
+                createdAt: Value(_remoteCreatedAt(remote)),
               ));
         } else {
-          await (_db.update(_db.sessions)..where((s) => s.id.equals(existing.id)))
-              .write(SessionsCompanion(
-            endTime: Value(endTimeStr == null ? null : DateTime.parse(endTimeStr)),
-            durationSeconds:
-                Value(remote.fields['durationSeconds'] as int? ?? existing.durationSeconds),
-            note: Value(remote.fields['note'] as String?),
-            updatedAt: Value(remote.updatedAt),
-            dirty: const Value(false),
-          ));
+          await (_db.update(_db.sessions)
+                ..where((s) => s.id.equals(existing.id)))
+              .write(companion);
         }
       } else if (action == SyncAction.applyRemoteDelete && existing != null) {
         await (_db.update(_db.sessions)..where((s) => s.id.equals(existing.id)))
@@ -238,4 +205,47 @@ class SyncEngine {
       }
     }
   }
+
+  /// The row's remote `created_at`, falling back to `updatedAt` for a row
+  /// serialized before that column was carried.
+  DateTime _remoteCreatedAt(SyncRow remote) {
+    final createdAt = remote.fields['created_at'];
+    return createdAt is String ? DateTime.parse(createdAt) : remote.updatedAt;
+  }
 }
+
+/// Maps a local [Activity] to its [SyncRow], keyed by the snake_case
+/// column names in `supabase/sync.sql` (PostgREST does no camelCase
+/// translation) and including the NOT-NULL `created_at` (reviewer C1+C2).
+SyncRow activityToSyncRow(Activity a) => SyncRow(
+      uid: a.uid,
+      updatedAt: a.updatedAt,
+      deletedAt: a.deletedAt,
+      fields: {
+        'name': a.name,
+        'color': a.color,
+        'hourly_rate': a.hourlyRate,
+        'currency_label': a.currencyLabel,
+        'archived': a.archived,
+        'created_at': a.createdAt.toUtc().toIso8601String(),
+      },
+    );
+
+/// Maps a local [Session] to its [SyncRow]. [activityUid] is the parent
+/// activity's cross-device `uid` (its local id is meaningless on another
+/// device). Keys are the snake_case `sessions` columns incl. `created_at`.
+SyncRow sessionToSyncRow(Session s, {required String? activityUid}) => SyncRow(
+      uid: s.uid,
+      updatedAt: s.updatedAt,
+      deletedAt: s.deletedAt,
+      fields: {
+        'activity_uid': activityUid,
+        'date': s.date.toUtc().toIso8601String(),
+        'start_time': s.startTime.toUtc().toIso8601String(),
+        'end_time': s.endTime?.toUtc().toIso8601String(),
+        'duration_seconds': s.durationSeconds,
+        'note': s.note,
+        'last_seen_at': s.lastSeenAt?.toUtc().toIso8601String(),
+        'created_at': s.createdAt.toUtc().toIso8601String(),
+      },
+    );

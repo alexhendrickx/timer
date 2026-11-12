@@ -42,4 +42,13 @@ void main() {
     expect(resolve(null, _remoteAt(5)).action, SyncAction.applyRemote);
     expect(resolve(_localAt(5), null).action, SyncAction.pushLocal);
   });
+
+  test('a remote tombstone new to this device is a delete, not an insert', () {
+    // Device A created then deleted a row while B was offline; B's first
+    // pull must not resurrect it as a live row (reviewer I1).
+    expect(
+      resolve(null, _remoteDeletedAt(5)).action,
+      SyncAction.applyRemoteDelete,
+    );
+  });
 }

@@ -39,7 +39,15 @@ SyncResolution resolve(SyncRow? local, SyncRow? remote) {
     throw ArgumentError('resolve requires at least one non-null side');
   }
   if (local == null) {
-    return const SyncResolution(SyncAction.applyRemote);
+    // A remote row this device has never seen: insert it — unless it is
+    // already a tombstone, in which case it must not be resurrected as a
+    // live row (reviewer I1). applyRemoteDelete is a no-op when there is
+    // no local row to mark, which is exactly the desired "drop it".
+    return SyncResolution(
+      remote!.deletedAt != null
+          ? SyncAction.applyRemoteDelete
+          : SyncAction.applyRemote,
+    );
   }
   if (remote == null) {
     return const SyncResolution(SyncAction.pushLocal);

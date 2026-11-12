@@ -27,37 +27,44 @@ class SupabaseSyncPort implements SyncPort {
         .from(table)
         .select()
         .gt('updated_at', since.toUtc().toIso8601String());
-    return rows.map(_toSyncRow).toList();
+    return rows.map(syncRowFromJson).toList();
   }
 
   @override
   Future<void> upsert(String table, List<SyncRow> rows) async {
     if (rows.isEmpty) return;
-    await _client.from(table).upsert(rows.map(_toJson).toList());
+    await _client.from(table).upsert(rows.map(syncRowToJson).toList());
   }
+}
 
-  SyncRow _toSyncRow(Map<String, dynamic> json) {
-    final fields = Map<String, Object?>.from(json)
-      ..remove('uid')
-      ..remove('updated_at')
-      ..remove('deleted_at')
-      ..remove('user_id');
-    return SyncRow(
-      uid: json['uid'] as String,
-      updatedAt: DateTime.parse(json['updated_at'] as String),
-      deletedAt: json['deleted_at'] == null
-          ? null
-          : DateTime.parse(json['deleted_at'] as String),
-      fields: fields,
-    );
-  }
+/// Serializes a [SyncRow] to the exact remote column set (see
+/// `supabase/sync.sql`). `fields` keys are already the snake_case column
+/// names; `user_id` is never sent (the table's `default auth.uid()` + RLS
+/// fill and guard it).
+Map<String, dynamic> syncRowToJson(SyncRow row) {
+  return {
+    ...row.fields,
+    'uid': row.uid,
+    'updated_at': row.updatedAt.toUtc().toIso8601String(),
+    'deleted_at': row.deletedAt?.toUtc().toIso8601String(),
+  };
+}
 
-  Map<String, dynamic> _toJson(SyncRow row) {
-    return {
-      ...row.fields,
-      'uid': row.uid,
-      'updated_at': row.updatedAt.toUtc().toIso8601String(),
-      'deleted_at': row.deletedAt?.toUtc().toIso8601String(),
-    };
-  }
+/// Inverse of [syncRowToJson] — parses a remote row back into a [SyncRow],
+/// leaving the non-identity columns in `fields` under their snake_case
+/// names (how the pull path in [SyncEngine] reads them).
+SyncRow syncRowFromJson(Map<String, dynamic> json) {
+  final fields = Map<String, Object?>.from(json)
+    ..remove('uid')
+    ..remove('updated_at')
+    ..remove('deleted_at')
+    ..remove('user_id');
+  return SyncRow(
+    uid: json['uid'] as String,
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+    deletedAt: json['deleted_at'] == null
+        ? null
+        : DateTime.parse(json['deleted_at'] as String),
+    fields: fields,
+  );
 }
