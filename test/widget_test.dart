@@ -28,7 +28,7 @@ Future<void> _teardownApp(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('Home shows the idle state with a disabled Start',
+  testWidgets('Home shows the empty state with no activities',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -36,10 +36,7 @@ void main() {
     await tester.pumpWidget(_buildApp(database));
     await tester.pumpAndSettle();
 
-    expect(find.text('No activities yet — add one to start tracking.'),
-        findsOneWidget);
-    final start = tester.widget<FilledButton>(find.bySubtype<FilledButton>());
-    expect(start.onPressed, isNull);
+    expect(find.text('Add your first activity'), findsOneWidget);
 
     await _teardownApp(tester);
   });
@@ -52,7 +49,7 @@ void main() {
     await tester.pumpWidget(_buildApp(database));
     await tester.pumpAndSettle();
 
-    final context = tester.element(find.text('Start'));
+    final context = tester.element(find.text('Timer'));
     expect(context.read<AppDatabase>(), same(database));
     expect(context.read<StorageLocationService>(), isNotNull);
     expect(context.read<TimerEngine>(), isNotNull);

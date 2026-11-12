@@ -4,13 +4,16 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/duration_utils.dart';
 import '../../activities/data/activity_repository.dart';
+import '../data/session_repository.dart';
+import '../service/start_coordinator.dart';
 import '../service/timer_engine.dart';
-import 'widgets/activity_picker.dart';
+import 'widgets/focus_card.dart';
 
-/// The main tracker screen: pick an activity and Start/Stop a live timer.
-/// On first launch it resolves any session left open by a quit/crash (D2).
+/// Home: a 2-column grid of focus cards. One tap on a card starts that
+/// activity immediately — this screen *is* the start control. On first
+/// launch it resolves any session left open by a quit/crash (D2), and if a
+/// timer ends up running it hands off to the Running screen.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,7 +22,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int? _selectedActivityId;
   bool _resumeHandled = false;
 
   @override
@@ -33,93 +35,107 @@ class _HomeScreenState extends State<HomeScreen> {
     _resumeHandled = true;
     final engine = context.read<TimerEngine>();
     final decision = await engine.detectOrphan();
-    if (decision == null || !mounted) return;
-
-    final repo = context.read<ActivityRepository>();
-    final activities = await repo.activeActivities();
-    final name = activities
-        .where((a) => a.id == decision.activityId)
-        .map((a) => a.name)
-        .firstOrNull;
-    if (!mounted) return;
-
-    final keep = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Timer was still running'),
-        content: Text(
-          'Timer for ${name ?? 'an activity'} has run since '
-          '${_formatClock(decision.start)}.\n\n'
-          'Keep it going, or stop it at ${_formatClock(decision.lastSeenAt)} '
-          '(when the app was last active)?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Stop at ${_formatClock(decision.lastSeenAt)}'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Keep going'),
-          ),
-        ],
-      ),
-    );
-
-    if (keep == true) {
-      await engine.resumeKeepRunning();
-    } else {
-      await engine.resumeStopAtLastSeen();
-    }
-  }
-
-  Future<void> _onStart(TimerEngine engine) async {
-    final id = _selectedActivityId;
-    if (id == null) return;
-
-    if (engine.running != null) {
+    if (decision != null && mounted) {
       final repo = context.read<ActivityRepository>();
       final activities = await repo.activeActivities();
-      final runningName = activities
-          .where((a) => a.id == engine.running!.activityId)
+      final name = activities
+          .where((a) => a.id == decision.activityId)
           .map((a) => a.name)
           .firstOrNull;
-      final nextName =
-          activities.where((a) => a.id == id).map((a) => a.name).firstOrNull;
       if (!mounted) return;
-      final confirmed = await showDialog<bool>(
+
+      final keep = await showDialog<bool>(
         context: context,
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('A timer is already running'),
+          title: const Text('Timer was still running'),
           content: Text(
-            '${runningName ?? 'A timer'} is running. '
-            'Stop it and start ${nextName ?? 'the new activity'}?',
+            'Timer for ${name ?? 'an activity'} has run since '
+            '${_formatClock(decision.start)}.\n\n'
+            'Keep it going, or stop it at ${_formatClock(decision.lastSeenAt)} '
+            '(when the app was last active)?',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text('Stop at ${_formatClock(decision.lastSeenAt)}'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Stop and start'),
+              child: const Text('Keep going'),
             ),
           ],
         ),
       );
-      if (confirmed != true) return;
-      await engine.stop();
+
+      if (keep == true) {
+        await engine.resumeKeepRunning();
+      } else {
+        await engine.resumeStopAtLastSeen();
+      }
     }
 
-    await engine.start(id);
+    // A resumed (or already-running) session always lands on Running (Step 4).
+    if (mounted && engine.running != null) {
+      context.go('/running');
+    }
+  }
+
+  Future<void> _onTapCard(
+    StartCoordinator coordinator,
+    ActivityRepository repo,
+    int activityId,
+  ) async {
+    final outcome = await coordinator.requestStart(activityId);
+    switch (outcome.kind) {
+      case StartKind.started:
+      case StartKind.alreadyRunning:
+        if (mounted) context.go('/running');
+        return;
+      case StartKind.needsSwitchConfirm:
+        final activities = await repo.activeActivities();
+        final runningName = activities
+            .where((a) => a.id == outcome.runningActivityId)
+            .map((a) => a.name)
+            .firstOrNull;
+        final nextName = activities
+            .where((a) => a.id == activityId)
+            .map((a) => a.name)
+            .firstOrNull;
+        if (!mounted) return;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('${runningName ?? 'A timer'} is running'),
+            content: Text(
+              'Stop it and start ${nextName ?? 'the new activity'}?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Stop and start'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true) {
+          await coordinator.confirmSwitch(activityId);
+          if (mounted) context.go('/running');
+        }
+        return;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final engine = context.watch<TimerEngine>();
-    final repo = context.read<ActivityRepository>();
-    final running = engine.running;
+    final coordinator = context.read<StartCoordinator>();
+    final activityRepo = context.read<ActivityRepository>();
+    final sessionRepo = context.read<SessionRepository>();
 
     return Scaffold(
       appBar: AppBar(
@@ -137,19 +153,58 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: running != null
-            ? _RunningView(
-                engine: engine,
-                repo: repo,
-                onStop: () => engine.stop(),
-              )
-            : _IdleView(
-                repo: repo,
-                selectedId: _selectedActivityId,
-                onChanged: (id) => setState(() => _selectedActivityId = id),
-                onStart: () => _onStart(engine),
+      body: StreamBuilder<List<Activity>>(
+        stream: activityRepo.watchActive(),
+        builder: (context, activitySnapshot) {
+          final activities = activitySnapshot.data ?? const [];
+          if (activities.isEmpty) {
+            return Center(
+              child: Text(
+                'Add your first activity',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.textSecondary),
               ),
+            );
+          }
+          return StreamBuilder<Map<int, int>>(
+            stream: sessionRepo.watchTodayTotals(DateTime.now()),
+            builder: (context, totalsSnapshot) {
+              final closedTotals = totalsSnapshot.data ?? const {};
+              final runningId = engine.running?.activityId;
+              final liveSeconds =
+                  runningId == null ? 0 : engine.elapsed.inSeconds;
+              final totalToday =
+                  closedTotals.values.fold<int>(0, (a, b) => a + b) +
+                      liveSeconds;
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 1,
+                ),
+                itemCount: activities.length,
+                itemBuilder: (context, index) {
+                  final activity = activities[index];
+                  final isRunning = activity.id == runningId;
+                  final seconds = (closedTotals[activity.id] ?? 0) +
+                      (isRunning ? liveSeconds : 0);
+                  return FocusCard(
+                    activity: activity,
+                    todaySeconds: seconds,
+                    fraction: ringFraction(seconds, totalToday),
+                    onTap: () =>
+                        _onTapCard(coordinator, activityRepo, activity.id),
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -157,101 +212,3 @@ class _HomeScreenState extends State<HomeScreen> {
 
 String _formatClock(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
-/// Idle state: activity picker + Start (disabled until an activity is picked).
-class _IdleView extends StatelessWidget {
-  const _IdleView({
-    required this.repo,
-    required this.selectedId,
-    required this.onChanged,
-    required this.onStart,
-  });
-
-  final ActivityRepository repo;
-  final int? selectedId;
-  final ValueChanged<int?> onChanged;
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<List<Activity>>(
-      stream: repo.watchActive(),
-      builder: (context, snapshot) {
-        final activities = snapshot.data ?? const [];
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ActivityPicker(
-                  activities: activities,
-                  selectedId: selectedId,
-                  onChanged: onChanged,
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: selectedId == null ? null : onStart,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Running state: live elapsed + current activity name + Stop.
-class _RunningView extends StatelessWidget {
-  const _RunningView({
-    required this.engine,
-    required this.repo,
-    required this.onStop,
-  });
-
-  final TimerEngine engine;
-  final ActivityRepository repo;
-  final VoidCallback onStop;
-
-  @override
-  Widget build(BuildContext context) {
-    final running = engine.running!;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FutureBuilder<List<Activity>>(
-          future: repo.activeActivities(),
-          builder: (context, snapshot) {
-            final name = (snapshot.data ?? const [])
-                .where((a) => a.id == running.activityId)
-                .map((a) => a.name)
-                .firstOrNull;
-            return Text(
-              name ?? 'Running',
-              style: Theme.of(context).textTheme.titleMedium,
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        Text(
-          formatHms(engine.elapsed.inSeconds),
-          style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                color: AppColors.accent,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-        ),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-          onPressed: onStop,
-          icon: const Icon(Icons.stop),
-          label: const Text('Stop'),
-        ),
-      ],
-    );
-  }
-}

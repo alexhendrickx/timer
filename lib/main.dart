@@ -7,6 +7,7 @@ import 'core/services/storage_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'feature/activities/data/activity_repository.dart';
 import 'feature/tracker/data/session_repository.dart';
+import 'feature/tracker/service/start_coordinator.dart';
 import 'feature/tracker/service/timer_engine.dart';
 
 Future<void> main() async {
@@ -54,6 +55,9 @@ class TimerApp extends StatelessWidget {
         Provider<ActivityRepository>.value(value: activityRepository),
         Provider<SessionRepository>.value(value: sessionRepository),
         ChangeNotifierProvider<TimerEngine>.value(value: timerEngine),
+        Provider<StartCoordinator>.value(
+          value: StartCoordinator(timerEngine),
+        ),
       ],
       child: MaterialApp.router(
         title: 'Timer',
