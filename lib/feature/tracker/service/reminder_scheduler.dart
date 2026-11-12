@@ -16,12 +16,20 @@ class ReminderScheduler {
     required this.settings,
     required this.notifications,
     required this.onBreakDue,
+    this.onNextScheduled,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
   final ReminderSettings settings;
   final NotificationsPort notifications;
   final void Function(DateTime firedAt) onBreakDue;
+
+  /// Notified with the next break's due time whenever one is (re-)armed, so
+  /// a caller that wants to fire [onBreakFired] in real time (main.dart, via
+  /// a `Timer`) knows when to. Optional: tests drive [onBreakFired] by hand
+  /// and never need this.
+  final void Function(DateTime nextAt)? onNextScheduled;
+
   final DateTime Function() _now;
 
   bool _running = false;
@@ -51,10 +59,12 @@ class ReminderScheduler {
   }
 
   void _scheduleNext(DateTime from) {
+    final nextAt = from.add(settings.interval);
     notifications.scheduleAt(
-      from.add(settings.interval),
+      nextAt,
       'Time to stand',
       'You have been tracking for a while — take a short break.',
     );
+    onNextScheduled?.call(nextAt);
   }
 }

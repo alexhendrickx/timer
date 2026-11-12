@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -18,10 +19,13 @@ import 'core/platform/mac/window_controller.dart';
 import 'core/platform/platform_shell.dart';
 import 'core/routing/app_router.dart';
 import 'core/services/database/app_database.dart';
+import 'core/services/notifications_service.dart';
 import 'core/services/storage_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'feature/activities/data/activity_repository.dart';
+import 'feature/settings/data/reminder_settings.dart';
 import 'feature/tracker/data/session_repository.dart';
+import 'feature/tracker/service/reminder_scheduler.dart';
 import 'feature/tracker/service/start_coordinator.dart';
 import 'feature/tracker/service/timer_engine.dart';
 
@@ -116,6 +120,63 @@ Future<void> main() async {
     platformRoutes: windowController != null ? macRoutes(windowController) : const [],
   );
 
+  // Break reminders: platform-free scheduler + the real notifications
+  // adapter. A denied permission never blocks tracking or the in-app
+  // overlay (Review Focus) — `init()` just logs and the fallback notification
+  // stays silent.
+  final reminderSettings = ReminderSettings();
+  await reminderSettings.load();
+  final notificationsService = NotificationsService();
+  await notificationsService.init();
+
+  // Tracks foreground/background so a due break shows the in-app overlay
+  // when visible, or an immediate local notification when not (Review
+  // Focus: notification permission denied never blocks either path).
+  final isForegrounded = ValueNotifier<bool>(true);
+
+  Timer? breakTimer;
+  late final ReminderScheduler reminderScheduler;
+  reminderScheduler = ReminderScheduler(
+    settings: reminderSettings,
+    notifications: notificationsService,
+    onBreakDue: (firedAt) {
+      if (isForegrounded.value) {
+        router.push('/break');
+      } else {
+        notificationsService.showNow(
+          'Time to stand',
+          'You have been tracking for a while — take a short break.',
+        );
+      }
+    },
+    // The scheduler itself stays a plain, deterministic object (Task 2); the
+    // real-time firing mechanism — a Timer — lives here, re-armed every time
+    // the scheduler reports a new due time.
+    onNextScheduled: (nextAt) {
+      breakTimer?.cancel();
+      final delay = nextAt.difference(DateTime.now());
+      if (delay > Duration.zero) {
+        breakTimer = Timer(delay, () => reminderScheduler.onBreakFired(DateTime.now()));
+      }
+    },
+  );
+
+  // Edge-triggered: TimerEngine.notifyListeners() fires every tick (every
+  // second) while running, so only a change in which session is open starts
+  // or stops the reminder — never a re-arm on every tick.
+  int? lastRunningSessionId;
+  timerEngine.addListener(() {
+    final running = timerEngine.running;
+    if (running != null && running.id != lastRunningSessionId) {
+      lastRunningSessionId = running.id;
+      reminderScheduler.onTimerStarted(running.startTime);
+    } else if (running == null && lastRunningSessionId != null) {
+      lastRunningSessionId = null;
+      breakTimer?.cancel();
+      reminderScheduler.onTimerStopped();
+    }
+  });
+
   DeepLinkListener? deepLinkListener;
   if (Platform.isIOS) {
     shell = IosPlatformShell(router);
@@ -143,6 +204,9 @@ Future<void> main() async {
     sessionRepository: sessionRepository,
     timerEngine: timerEngine,
     startCoordinator: startCoordinator,
+    reminderSettings: reminderSettings,
+    reminderScheduler: reminderScheduler,
+    isForegrounded: isForegrounded,
     shell: shell,
     router: router,
     windowController: windowController,
@@ -160,20 +224,59 @@ Future<void> main() async {
 }
 
 class TimerApp extends StatefulWidget {
-  TimerApp({
+  factory TimerApp({
+    Key? key,
+    required StorageLocationService storage,
+    required AppDatabase database,
+    required ActivityRepository activityRepository,
+    required SessionRepository sessionRepository,
+    required TimerEngine timerEngine,
+    StartCoordinator? startCoordinator,
+    ReminderSettings? reminderSettings,
+    ReminderScheduler? reminderScheduler,
+    ValueNotifier<bool>? isForegrounded,
+    PlatformShell? shell,
+    GoRouter? router,
+    WindowController? windowController,
+  }) {
+    final settings = reminderSettings ?? ReminderSettings();
+    return TimerApp._(
+      key: key,
+      storage: storage,
+      database: database,
+      activityRepository: activityRepository,
+      sessionRepository: sessionRepository,
+      timerEngine: timerEngine,
+      startCoordinator: startCoordinator ?? StartCoordinator(timerEngine),
+      reminderSettings: settings,
+      reminderScheduler: reminderScheduler ??
+          ReminderScheduler(
+            settings: settings,
+            notifications: NotificationsService(),
+            onBreakDue: (_) {},
+          ),
+      isForegrounded: isForegrounded ?? ValueNotifier<bool>(true),
+      shell: shell ?? NoopPlatformShell(),
+      router: router ?? buildAppRouter(),
+      windowController: windowController,
+    );
+  }
+
+  const TimerApp._({
     super.key,
     required this.storage,
     required this.database,
     required this.activityRepository,
     required this.sessionRepository,
     required this.timerEngine,
-    StartCoordinator? startCoordinator,
-    PlatformShell? shell,
-    GoRouter? router,
+    required this.startCoordinator,
+    required this.reminderSettings,
+    required this.reminderScheduler,
+    required this.isForegrounded,
+    required this.shell,
+    required this.router,
     this.windowController,
-  })  : startCoordinator = startCoordinator ?? StartCoordinator(timerEngine),
-        shell = shell ?? NoopPlatformShell(),
-        router = router ?? buildAppRouter();
+  });
 
   final StorageLocationService storage;
   final AppDatabase database;
@@ -181,6 +284,13 @@ class TimerApp extends StatefulWidget {
   final SessionRepository sessionRepository;
   final TimerEngine timerEngine;
   final StartCoordinator startCoordinator;
+  final ReminderSettings reminderSettings;
+  final ReminderScheduler reminderScheduler;
+
+  /// True when the app is in the foreground — [main]'s reminder wiring reads
+  /// this to decide overlay vs. local notification when a break fires.
+  final ValueNotifier<bool> isForegrounded;
+
   final PlatformShell shell;
   final GoRouter router;
 
@@ -192,17 +302,24 @@ class TimerApp extends StatefulWidget {
   State<TimerApp> createState() => _TimerAppState();
 }
 
-class _TimerAppState extends State<TimerApp> {
+class _TimerAppState extends State<TimerApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     widget.windowController?.mode.addListener(_onModeChanged);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.windowController?.mode.removeListener(_onModeChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.isForegrounded.value = state == AppLifecycleState.resumed;
   }
 
   // Swap the Flutter content to match the window shape the controller set.
@@ -227,6 +344,8 @@ class _TimerAppState extends State<TimerApp> {
         Provider<SessionRepository>.value(value: widget.sessionRepository),
         ChangeNotifierProvider<TimerEngine>.value(value: widget.timerEngine),
         Provider<StartCoordinator>.value(value: widget.startCoordinator),
+        Provider<ReminderSettings>.value(value: widget.reminderSettings),
+        Provider<ReminderScheduler>.value(value: widget.reminderScheduler),
         Provider<PlatformShell>.value(value: widget.shell),
         if (widget.windowController != null)
           Provider<WindowController>.value(value: widget.windowController!),

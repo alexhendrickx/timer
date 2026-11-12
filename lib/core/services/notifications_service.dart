@@ -59,4 +59,19 @@ class NotificationsService implements NotificationsPort {
 
   @override
   Future<void> cancelAll() => _plugin.cancelAll();
+
+  /// Shows a notification immediately — used when a break fires while the
+  /// app is alive but backgrounded, as opposed to [scheduleAt]'s future-dated
+  /// fallback for when the process is fully suspended.
+  Future<void> showNow(String title, String body) {
+    return _plugin.show(
+      _notificationId,
+      title,
+      body,
+      const NotificationDetails(
+        iOS: DarwinNotificationDetails(),
+        macOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
 }

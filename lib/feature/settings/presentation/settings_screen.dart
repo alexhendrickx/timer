@@ -5,9 +5,20 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/storage_location_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../tracker/service/reminder_scheduler.dart';
+import '../data/reminder_settings.dart';
 
-/// Settings for v0.1.0: shows the current data folder and lets the user change
-/// it. Reminder intervals and the rest arrive in later versions.
+/// Common break-interval choices offered in Settings.
+const List<Duration> _reminderIntervalChoices = [
+  Duration(minutes: 15),
+  Duration(minutes: 30),
+  Duration(minutes: 45),
+  Duration(minutes: 60),
+  Duration(minutes: 90),
+  Duration(minutes: 120),
+];
+
+/// Settings: data folder + the break-reminder interval.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -23,6 +34,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final storage = context.read<StorageLocationService>();
     final folder = _justChangedTo ?? storage.currentFolder ?? 'Resolving…';
     final fallback = storage.lastFallbackReason;
+    final reminderSettings = context.read<ReminderSettings>();
+    final reminderScheduler = context.read<ReminderScheduler>();
 
     return Scaffold(
       appBar: AppBar(
@@ -71,9 +84,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ?.copyWith(color: AppColors.textSecondary),
             ),
           ],
+          const SizedBox(height: 32),
+          Text('Break reminders',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'A gentle full-screen nudge while a timer is running.',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          DropdownButton<Duration>(
+            value: reminderSettings.interval,
+            items: [
+              for (final choice in _reminderIntervalChoices)
+                DropdownMenuItem(
+                  value: choice,
+                  child: Text('Every ${choice.inMinutes} min'),
+                ),
+            ],
+            onChanged: (value) =>
+                _changeReminderInterval(reminderSettings, reminderScheduler, value),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _changeReminderInterval(
+    ReminderSettings settings,
+    ReminderScheduler scheduler,
+    Duration? value,
+  ) async {
+    if (value == null) return;
+    settings.interval = value;
+    await settings.save();
+    scheduler.onSettingsChanged();
+    if (mounted) setState(() {});
   }
 
   Future<void> _changeFolder(StorageLocationService storage) async {

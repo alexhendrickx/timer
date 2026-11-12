@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../feature/activities/presentation/activities_screen.dart';
 import '../../feature/settings/presentation/settings_screen.dart';
+import '../../feature/tracker/presentation/break_overlay.dart';
 import '../../feature/tracker/presentation/home_screen.dart';
 import '../../feature/tracker/presentation/quick_start_picker.dart';
 import '../../feature/tracker/presentation/running_screen.dart';
@@ -27,6 +28,10 @@ GoRouter buildAppRouter({List<RouteBase> platformRoutes = const []}) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/break',
+        builder: (context, state) => const BreakOverlay(),
       ),
       GoRoute(
         path: '/quick-start',
