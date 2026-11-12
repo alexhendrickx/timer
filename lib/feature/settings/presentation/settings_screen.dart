@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/storage_location_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../sync/service/auth_service.dart';
 import '../../tracker/service/reminder_scheduler.dart';
 import '../data/reminder_settings.dart';
 import '../data/rounding_settings.dart';
@@ -42,6 +43,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final reminderSettings = context.read<ReminderSettings>();
     final reminderScheduler = context.read<ReminderScheduler>();
     final roundingSettings = context.read<RoundingSettings>();
+    // Null when Supabase wasn't configured at launch (no --dart-define
+    // URL/key) — sync is then simply absent from Settings, and the app
+    // behaves exactly like v0.8 (spec Sync — Signed out).
+    final auth = context.watch<AuthService?>();
 
     return Scaffold(
       appBar: AppBar(
@@ -137,6 +142,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             onChanged: (value) => _changeRoundingStep(roundingSettings, value),
           ),
+          if (auth != null) ...[
+            const SizedBox(height: 32),
+            Text('Sync', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              auth.isSignedIn
+                  ? 'Signed in — activities and sessions sync across your devices.'
+                  : 'Sign in to sync activities and sessions across your devices. '
+                      'Fully optional — the app works the same either way.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _toggleSignIn(auth),
+              icon: Icon(auth.isSignedIn ? Icons.logout : Icons.apple),
+              label: Text(
+                auth.isSignedIn ? 'Sign out' : 'Sign in with Apple to sync',
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -159,6 +187,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     settings.stepSeconds = value;
     await settings.save();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleSignIn(AuthService auth) async {
+    if (auth.isSignedIn) {
+      await auth.signOut();
+    } else {
+      await auth.signInWithApple();
+    }
   }
 
   Future<void> _changeFolder(StorageLocationService storage) async {
