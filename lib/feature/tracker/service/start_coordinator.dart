@@ -22,6 +22,11 @@ class StartCoordinator {
 
   final TimerEngine _engine;
 
+  /// True while a cold [_engine.start] is awaiting its DB write. Guards
+  /// against a second near-simultaneous card tap opening a second session
+  /// before the first has set [TimerEngine.running].
+  bool _startInFlight = false;
+
   /// Call when a card is tapped. Starts immediately if nothing is running,
   /// no-ops if the tapped activity is already the running one, or returns
   /// [StartKind.needsSwitchConfirm] for the UI to confirm before
@@ -29,7 +34,17 @@ class StartCoordinator {
   Future<StartOutcome> requestStart(int activityId) async {
     final running = _engine.running;
     if (running == null) {
-      await _engine.start(activityId);
+      // A start is already landing — treat the racing tap as a no-op rather
+      // than opening a duplicate session.
+      if (_startInFlight) {
+        return const StartOutcome(StartKind.alreadyRunning);
+      }
+      _startInFlight = true;
+      try {
+        await _engine.start(activityId);
+      } finally {
+        _startInFlight = false;
+      }
       return const StartOutcome(StartKind.started);
     }
     if (running.activityId == activityId) {

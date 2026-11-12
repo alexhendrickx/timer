@@ -52,4 +52,17 @@ void main() {
     await coord.confirmSwitch(b);
     expect(engine.running!.activityId, b);
   });
+
+  test('concurrent requestStart does not throw or open two sessions', () async {
+    // Two near-simultaneous card taps both observe nothing running before the
+    // first start's DB write lands. Must not crash or open a second session.
+    final f1 = coord.requestStart(a);
+    final f2 = coord.requestStart(b);
+    await Future.wait([f1, f2]);
+
+    final open = await (db.select(db.sessions)
+          ..where((s) => s.endTime.isNull()))
+        .get();
+    expect(open, hasLength(1));
+  });
 }
