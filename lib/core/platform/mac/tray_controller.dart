@@ -48,6 +48,11 @@ class TrayController with TrayListener {
   String? _cachedName;
   bool? _menuRunning;
 
+  /// Direct title override — the `PlatformShell.setMenuBarTitle` seam
+  /// delegates here. [bindEngine] is the normal live-ticking path; this is
+  /// for callers that compute the title themselves.
+  void setTitle(String title) => trayManager.setTitle(title);
+
   Future<void> init() async {
     trayManager.addListener(this);
     if (iconPath != null) {

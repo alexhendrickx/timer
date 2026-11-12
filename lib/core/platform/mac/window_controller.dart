@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Which face the single app window is currently showing.
-enum AppWindowMode { popover, main }
+enum AppWindowMode { popover, picker, main }
 
 /// Controls the one native window: a small, frameless, always-on-top popover
 /// anchored top-right near the menu-bar item, or the normal titled main
@@ -18,6 +18,7 @@ class WindowController with WindowListener {
   final ValueNotifier<AppWindowMode> mode = ValueNotifier(AppWindowMode.main);
 
   static const Size _popoverSize = Size(340, 460);
+  static const Size _pickerSize = Size(420, 360);
   static const Size _mainSize = Size(760, 580);
 
   /// Intercepts the native window-close so closing hides rather than quits.
@@ -49,6 +50,24 @@ class WindowController with WindowListener {
       await showPopover();
     }
   }
+
+  /// Shows the light, centered Spotlight-style quick-start overlay, without
+  /// touching whatever the main window was showing — the global hotkey must
+  /// never raise the main window (spec: Quick-start).
+  Future<void> showQuickStartPicker() async {
+    mode.value = AppWindowMode.picker;
+    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    await windowManager.setMovable(false);
+    await windowManager.setAlwaysOnTop(true);
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.setSize(_pickerSize);
+    await windowManager.center();
+    await windowManager.show();
+    await windowManager.focus();
+  }
+
+  /// Hides the quick-start picker overlay (app keeps running in the menu bar).
+  Future<void> hideQuickStartPicker() => windowManager.hide();
 
   /// Shows the full main window: titled, centered, not always-on-top.
   Future<void> showMainWindow() async {
