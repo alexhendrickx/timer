@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/platform/platform_shell.dart';
 import '../../../core/services/database/app_database.dart';
+import '../../../core/services/storage_location_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../activities/data/activity_repository.dart';
 import '../../activities/presentation/widgets/activity_edit_sheet.dart';
@@ -25,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _resumeHandled = false;
+  bool _fallbackDismissed = false;
 
   @override
   void initState() {
@@ -132,6 +134,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// First-run (and "+") entry point: on iPhone this opens the add-activity
+  /// sheet in place; on Mac it routes to the dedicated Activities screen.
+  void _addFirstActivity(bool hasMenuBar, ActivityRepository activityRepo) {
+    if (hasMenuBar) {
+      context.go('/activities');
+    } else {
+      ActivityEditSheet.show(context, repo: activityRepo, existing: null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final engine = context.watch<TimerEngine>();
@@ -142,6 +154,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // menu); iPhone manages activities in place via long-press + "+" on the
     // cards below, so it skips the list view entirely.
     final hasMenuBar = context.read<PlatformShell>().hasMenuBar;
+    // Surfaced only on Mac: the chosen data folder was missing at launch and
+    // the app fell back to the default (v0.1 behavior). Dismissible.
+    final fallbackReason = context
+        .read<StorageLocationService>()
+        .lastFallbackReason;
 
     return Scaffold(
       appBar: AppBar(
@@ -175,67 +192,113 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Activity>>(
-        stream: activityRepo.watchActive(),
-        builder: (context, activitySnapshot) {
-          final activities = activitySnapshot.data ?? const [];
-          if (activities.isEmpty) {
-            return Center(
-              child: Text(
-                'Add your first activity',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.textSecondary),
+      body: Column(
+        children: [
+          if (hasMenuBar && fallbackReason != null && !_fallbackDismissed)
+            Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: AppColors.danger),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      fallbackReason,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.danger),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Dismiss',
+                    onPressed: () => setState(() => _fallbackDismissed = true),
+                  ),
+                ],
               ),
-            );
-          }
-          return StreamBuilder<Map<int, int>>(
-            stream: sessionRepo.watchTodayTotals(DateTime.now()),
-            builder: (context, totalsSnapshot) {
-              final closedTotals = totalsSnapshot.data ?? const {};
-              final runningId = engine.running?.activityId;
-              final liveSeconds =
-                  runningId == null ? 0 : engine.elapsed.inSeconds;
-              final totalToday =
-                  closedTotals.values.fold<int>(0, (a, b) => a + b) +
-                      liveSeconds;
-
-              return GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1,
-                ),
-                itemCount: activities.length,
-                itemBuilder: (context, index) {
-                  final activity = activities[index];
-                  final isRunning = activity.id == runningId;
-                  final seconds = (closedTotals[activity.id] ?? 0) +
-                      (isRunning ? liveSeconds : 0);
-                  return FocusCard(
-                    activity: activity,
-                    todaySeconds: seconds,
-                    fraction: ringFraction(seconds, totalToday),
-                    onTap: () =>
-                        _onTapCard(coordinator, activityRepo, activity.id),
-                    onLongPress: hasMenuBar
-                        ? null
-                        : () => ActivityEditSheet.show(
-                              context,
-                              repo: activityRepo,
-                              existing: activity,
-                            ),
-                    onViewHistory: () =>
-                        context.push('/history', extra: activity.id),
+            ),
+          Expanded(
+            child: StreamBuilder<List<Activity>>(
+              stream: activityRepo.watchActive(),
+              builder: (context, activitySnapshot) {
+                final activities = activitySnapshot.data ?? const [];
+                if (activities.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'No activities yet',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: () =>
+                              _addFirstActivity(hasMenuBar, activityRepo),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add your first activity'),
+                        ),
+                      ],
+                    ),
                   );
-                },
-              );
-            },
-          );
-        },
+                }
+                return StreamBuilder<Map<int, int>>(
+                  stream: sessionRepo.watchTodayTotals(DateTime.now()),
+                  builder: (context, totalsSnapshot) {
+                    final closedTotals = totalsSnapshot.data ?? const {};
+                    final runningId = engine.running?.activityId;
+                    final liveSeconds = runningId == null
+                        ? 0
+                        : engine.elapsed.inSeconds;
+                    final totalToday =
+                        closedTotals.values.fold<int>(0, (a, b) => a + b) +
+                        liveSeconds;
+
+                    return GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1,
+                          ),
+                      itemCount: activities.length,
+                      itemBuilder: (context, index) {
+                        final activity = activities[index];
+                        final isRunning = activity.id == runningId;
+                        final seconds =
+                            (closedTotals[activity.id] ?? 0) +
+                            (isRunning ? liveSeconds : 0);
+                        return FocusCard(
+                          activity: activity,
+                          todaySeconds: seconds,
+                          fraction: ringFraction(seconds, totalToday),
+                          onTap: () => _onTapCard(
+                            coordinator,
+                            activityRepo,
+                            activity.id,
+                          ),
+                          onLongPress: hasMenuBar
+                              ? null
+                              : () => ActivityEditSheet.show(
+                                  context,
+                                  repo: activityRepo,
+                                  existing: activity,
+                                ),
+                          onViewHistory: () =>
+                              context.push('/history', extra: activity.id),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
