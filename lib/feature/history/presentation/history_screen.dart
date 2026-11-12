@@ -6,6 +6,7 @@ import '../../../core/services/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/duration_utils.dart';
 import '../../activities/data/activity_repository.dart';
+import '../../settings/data/rounding_settings.dart';
 import '../data/history_repository.dart';
 import '../service/history_aggregator.dart';
 import 'widgets/month_heatmap.dart';
@@ -100,6 +101,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   history: history,
                   activityId: _activityId,
                   day: _focusDate,
+                  stepSeconds: context.watch<RoundingSettings>().stepSeconds,
                 ),
               _HistoryMode.week => _WeekView(
                   history: history,
@@ -167,11 +169,13 @@ class _DayView extends StatelessWidget {
     required this.history,
     required this.activityId,
     required this.day,
+    required this.stepSeconds,
   });
 
   final HistoryRepository history;
   final int? activityId;
   final DateTime day;
+  final int stepSeconds;
 
   @override
   Widget build(BuildContext context) {
@@ -183,7 +187,7 @@ class _DayView extends StatelessWidget {
       builder: (context, snapshot) {
         final sessions = snapshot.data ?? const [];
         final exactTotal = sessions.fold<int>(0, (a, s) => a + s.durationSeconds);
-        final roundedTotal = roundToNearest(exactTotal);
+        final roundedTotal = roundToNearest(exactTotal, stepSeconds);
         return Column(
           children: [
             Padding(

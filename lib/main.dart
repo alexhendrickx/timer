@@ -25,6 +25,7 @@ import 'core/theme/app_theme.dart';
 import 'feature/activities/data/activity_repository.dart';
 import 'feature/history/data/history_repository.dart';
 import 'feature/settings/data/reminder_settings.dart';
+import 'feature/settings/data/rounding_settings.dart';
 import 'feature/tracker/data/session_repository.dart';
 import 'feature/tracker/service/reminder_scheduler.dart';
 import 'feature/tracker/service/start_coordinator.dart';
@@ -128,6 +129,8 @@ Future<void> main() async {
   // stays silent.
   final reminderSettings = ReminderSettings();
   await reminderSettings.load();
+  final roundingSettings = RoundingSettings();
+  await roundingSettings.load();
   final notificationsService = NotificationsService();
   await notificationsService.init();
 
@@ -218,6 +221,7 @@ Future<void> main() async {
     startCoordinator: startCoordinator,
     reminderSettings: reminderSettings,
     reminderScheduler: reminderScheduler,
+    roundingSettings: roundingSettings,
     isForegrounded: isForegrounded,
     shell: shell,
     router: router,
@@ -247,6 +251,7 @@ class TimerApp extends StatefulWidget {
     StartCoordinator? startCoordinator,
     ReminderSettings? reminderSettings,
     ReminderScheduler? reminderScheduler,
+    RoundingSettings? roundingSettings,
     ValueNotifier<bool>? isForegrounded,
     PlatformShell? shell,
     GoRouter? router,
@@ -269,6 +274,7 @@ class TimerApp extends StatefulWidget {
             notifications: NotificationsService(),
             onBreakDue: (_) {},
           ),
+      roundingSettings: roundingSettings ?? RoundingSettings(),
       isForegrounded: isForegrounded ?? ValueNotifier<bool>(true),
       shell: shell ?? NoopPlatformShell(),
       router: router ?? buildAppRouter(),
@@ -287,6 +293,7 @@ class TimerApp extends StatefulWidget {
     required this.startCoordinator,
     required this.reminderSettings,
     required this.reminderScheduler,
+    required this.roundingSettings,
     required this.isForegrounded,
     required this.shell,
     required this.router,
@@ -302,6 +309,7 @@ class TimerApp extends StatefulWidget {
   final StartCoordinator startCoordinator;
   final ReminderSettings reminderSettings;
   final ReminderScheduler reminderScheduler;
+  final RoundingSettings roundingSettings;
 
   /// True when the app is in the foreground — [main]'s reminder wiring reads
   /// this to decide overlay vs. local notification when a break fires.
@@ -363,6 +371,7 @@ class _TimerAppState extends State<TimerApp> with WidgetsBindingObserver {
         Provider<StartCoordinator>.value(value: widget.startCoordinator),
         Provider<ReminderSettings>.value(value: widget.reminderSettings),
         Provider<ReminderScheduler>.value(value: widget.reminderScheduler),
+        Provider<RoundingSettings>.value(value: widget.roundingSettings),
         Provider<PlatformShell>.value(value: widget.shell),
         if (widget.windowController != null)
           Provider<WindowController>.value(value: widget.windowController!),

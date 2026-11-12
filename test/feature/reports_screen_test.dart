@@ -6,6 +6,7 @@ import 'package:timer/core/services/database/app_database.dart';
 import 'package:timer/feature/activities/data/activity_repository.dart';
 import 'package:timer/feature/history/data/history_repository.dart';
 import 'package:timer/feature/history/presentation/reports_screen.dart';
+import 'package:timer/feature/settings/data/rounding_settings.dart';
 import 'package:timer/feature/tracker/data/session_repository.dart';
 
 void main() {
@@ -36,6 +37,7 @@ void main() {
         Provider<AppDatabase>.value(value: db),
         Provider<ActivityRepository>.value(value: ActivityRepository(db)),
         Provider<HistoryRepository>.value(value: HistoryRepository(db)),
+        Provider<RoundingSettings>.value(value: RoundingSettings()),
       ],
       child: const MaterialApp(home: ReportsScreen()),
     );

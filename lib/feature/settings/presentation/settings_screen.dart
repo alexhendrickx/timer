@@ -7,6 +7,7 @@ import '../../../core/services/storage_location_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../tracker/service/reminder_scheduler.dart';
 import '../data/reminder_settings.dart';
+import '../data/rounding_settings.dart';
 
 /// Common break-interval choices offered in Settings.
 const List<Duration> _reminderIntervalChoices = [
@@ -17,6 +18,10 @@ const List<Duration> _reminderIntervalChoices = [
   Duration(minutes: 90),
   Duration(minutes: 120),
 ];
+
+/// Rounding-step choices (seconds) offered in Settings — the step totals,
+/// reports, and exports round to (view only; spec D4).
+const List<int> _roundingStepChoices = [900, 1800, 3600];
 
 /// Settings: data folder + the break-reminder interval.
 class SettingsScreen extends StatefulWidget {
@@ -36,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final fallback = storage.lastFallbackReason;
     final reminderSettings = context.read<ReminderSettings>();
     final reminderScheduler = context.read<ReminderScheduler>();
+    final roundingSettings = context.read<RoundingSettings>();
 
     return Scaffold(
       appBar: AppBar(
@@ -108,6 +114,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (value) =>
                 _changeReminderInterval(reminderSettings, reminderScheduler, value),
           ),
+          const SizedBox(height: 32),
+          Text('Rounding', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Totals, reports, and exports round sums to this step. '
+            'The exact recorded time is never changed.',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          DropdownButton<int>(
+            value: roundingSettings.stepSeconds,
+            items: [
+              for (final choice in _roundingStepChoices)
+                DropdownMenuItem(
+                  value: choice,
+                  child: Text('Nearest ${choice ~/ 60} min'),
+                ),
+            ],
+            onChanged: (value) => _changeRoundingStep(roundingSettings, value),
+          ),
         ],
       ),
     );
@@ -122,6 +151,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     settings.interval = value;
     await settings.save();
     scheduler.onSettingsChanged();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _changeRoundingStep(RoundingSettings settings, int? value) async {
+    if (value == null) return;
+    settings.stepSeconds = value;
+    await settings.save();
     if (mounted) setState(() {});
   }
 

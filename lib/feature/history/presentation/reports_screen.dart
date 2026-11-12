@@ -6,6 +6,7 @@ import '../../../core/services/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/duration_utils.dart';
 import '../../activities/data/activity_repository.dart';
+import '../../settings/data/rounding_settings.dart';
 import '../data/history_repository.dart';
 import '../service/totals_calculator.dart';
 import 'widgets/activity_ring_chart.dart';
@@ -55,14 +56,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final history = context.read<HistoryRepository>();
     final activityRepo = context.read<ActivityRepository>();
     _activitiesFuture = activityRepo.activeActivities();
-    _totalsFuture = history.totals(range: _rangeFor(_period), activityId: _activityId);
+    _totalsFuture = history.totals(
+      range: _rangeFor(_period),
+      activityId: _activityId,
+      stepSeconds: context.read<RoundingSettings>().stepSeconds,
+    );
   }
 
   void _refreshTotals() {
     final history = context.read<HistoryRepository>();
     setState(() {
-      _totalsFuture =
-          history.totals(range: _rangeFor(_period), activityId: _activityId);
+      _totalsFuture = history.totals(
+        range: _rangeFor(_period),
+        activityId: _activityId,
+        stepSeconds: context.read<RoundingSettings>().stepSeconds,
+      );
     });
   }
 
