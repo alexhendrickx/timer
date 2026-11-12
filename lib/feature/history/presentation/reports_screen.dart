@@ -6,6 +6,8 @@ import '../../../core/services/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/duration_utils.dart';
 import '../../activities/data/activity_repository.dart';
+import '../../export/presentation/export_sheet.dart';
+import '../../export/service/export_service.dart';
 import '../../settings/data/rounding_settings.dart';
 import '../data/history_repository.dart';
 import '../service/totals_calculator.dart';
@@ -83,6 +85,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
           onPressed: () => context.pop(),
         ),
         title: const Text('Reports'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share),
+            tooltip: 'Export',
+            onPressed: () => ExportSheet.show(
+              context,
+              exportService: ExportService(
+                history: context.read<HistoryRepository>(),
+                activities: context.read<ActivityRepository>(),
+                rounding: context.read<RoundingSettings>(),
+              ),
+              range: _rangeFor(_period),
+              activityId: _activityId,
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
