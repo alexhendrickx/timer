@@ -88,12 +88,19 @@ class ExportService {
               total: t,
             ),
       ];
+      // A grand amount only makes sense when every rated activity shares one
+      // currency — summing €75 and $100 into "175" on an invoice is
+      // meaningless, so omit it when the scope mixes currencies.
+      final ratedGroups = groups.where((g) => g.total.amount != null);
+      final currencies = {
+        for (final g in ratedGroups) g.activity.currencyLabel,
+      };
       final report = Report(
         range: range,
         groups: groups,
         grandRoundedSeconds: totals.fold<int>(0, (a, t) => a + t.roundedSeconds),
-        grandAmount: totals.any((t) => t.amount != null)
-            ? totals.where((t) => t.amount != null).fold<double>(0, (a, t) => a + t.amount!)
+        grandAmount: ratedGroups.isNotEmpty && currencies.length == 1
+            ? ratedGroups.fold<double>(0, (a, g) => a + g.total.amount!)
             : null,
       );
       return _writeFiles('time-report', report, formats, dir);

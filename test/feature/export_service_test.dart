@@ -72,6 +72,56 @@ void main() {
     expect(files.length, 3);
   });
 
+  test('combined scope with mixed currencies omits the grand amount', () async {
+    final activities = ActivityRepository(db);
+    final sessions = SessionRepository(db);
+    final eur = await activities.create(
+        name: 'Client EUR', hourlyRate: 75, currencyLabel: 'EUR');
+    final usd = await activities.create(
+        name: 'Client USD', hourlyRate: 100, currencyLabel: 'USD');
+    for (final activityId in [eur, usd]) {
+      final id = await sessions.startSession(
+          activityId: activityId, start: DateTime(2026, 11, 1, 9, 0));
+      await sessions.closeSession(id, DateTime(2026, 11, 1, 10, 0));
+    }
+
+    final files = await svc.buildFiles(
+      formats: {ExportFormat.html},
+      scope: ExportScope.combined,
+    );
+    final html = await File(files.single.path).readAsString();
+    // Per-activity amounts still appear (75.00 EUR, 100.00 USD) but the
+    // grand-total line must not sum two currencies into one figure.
+    final grandLine = html
+        .split('\n')
+        .firstWhere((l) => l.contains('Grand total'));
+    expect(grandLine, isNot(contains('175.00')));
+  });
+
+  test('combined scope with one currency keeps the grand amount', () async {
+    final activities = ActivityRepository(db);
+    final sessions = SessionRepository(db);
+    final a1 = await activities.create(
+        name: 'Client A', hourlyRate: 75, currencyLabel: 'EUR');
+    final a2 = await activities.create(
+        name: 'Client B', hourlyRate: 25, currencyLabel: 'EUR');
+    for (final activityId in [a1, a2]) {
+      final id = await sessions.startSession(
+          activityId: activityId, start: DateTime(2026, 11, 1, 9, 0));
+      await sessions.closeSession(id, DateTime(2026, 11, 1, 10, 0));
+    }
+
+    final files = await svc.buildFiles(
+      formats: {ExportFormat.html},
+      scope: ExportScope.combined,
+    );
+    final html = await File(files.single.path).readAsString();
+    final grandLine = html
+        .split('\n')
+        .firstWhere((l) => l.contains('Grand total'));
+    expect(grandLine, contains('100.00')); // 75 + 25, same currency
+  });
+
   test('empty filter yields a well-formed empty CSV, not a crash', () async {
     final files = await svc.buildFiles(
       formats: {ExportFormat.csv},
