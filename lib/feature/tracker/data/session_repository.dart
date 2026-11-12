@@ -56,4 +56,22 @@ class SessionRepository {
     return (_db.select(_db.sessions)..where((s) => s.endTime.isNull()))
         .getSingleOrNull();
   }
+
+  /// Live map of `activityId → summed exact durationSeconds` for closed
+  /// sessions whose start day (D5) is the same as [today]. Activities with
+  /// no session today are absent from the map.
+  Stream<Map<int, int>> watchTodayTotals(DateTime today) {
+    final day = DateTime(today.year, today.month, today.day);
+    final total = _db.sessions.durationSeconds.sum();
+    final query = _db.selectOnly(_db.sessions)
+      ..addColumns([_db.sessions.activityId, total])
+      ..where(_db.sessions.date.equals(day) & _db.sessions.endTime.isNotNull())
+      ..groupBy([_db.sessions.activityId]);
+    return query.watch().map((rows) {
+      return {
+        for (final row in rows)
+          row.read(_db.sessions.activityId)!: row.read(total) ?? 0,
+      };
+    });
+  }
 }
