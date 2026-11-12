@@ -81,6 +81,9 @@ dev_dependencies:
 
   # drift code generation.
   drift_dev: ^2.28.0
+  # Used directly in test/core/migration_test.dart to seed a raw v1 sqlite
+  # file (otherwise only a transitive dep of sqlite3_flutter_libs).
+  sqlite3: ^2.9.0
   build_runner: ^2.4.15
 
   # The "flutter_lints" package below contains a set of recommended lints to

@@ -18,6 +18,8 @@ Session _session({
     durationSeconds: end.difference(start).inSeconds,
     createdAt: start,
     updatedAt: start,
+    uid: 'session-$id',
+    dirty: false,
   );
 }
 

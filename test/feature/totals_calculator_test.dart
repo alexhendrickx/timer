@@ -13,6 +13,8 @@ Session _session(int seconds, {int id = 1, int activityId = 1}) {
     durationSeconds: seconds,
     createdAt: start,
     updatedAt: start,
+    uid: 'session-$id',
+    dirty: false,
   );
 }
 
@@ -23,6 +25,9 @@ Activity _activity({int id = 1, double? hourlyRate}) {
     archived: false,
     hourlyRate: hourlyRate,
     createdAt: DateTime(2026, 1, 1),
+    updatedAt: DateTime(2026, 1, 1),
+    uid: 'activity-$id',
+    dirty: false,
   );
 }
 

@@ -12,6 +12,9 @@ Activity _activity({required int id, String name = 'Client X', double? hourlyRat
     hourlyRate: hourlyRate,
     archived: false,
     createdAt: DateTime(2026, 1, 1),
+    updatedAt: DateTime(2026, 1, 1),
+    uid: 'activity-$id',
+    dirty: false,
   );
 }
 
@@ -25,6 +28,8 @@ Session _session(int id, int activityId, DateTime start, int durationSeconds) {
     durationSeconds: durationSeconds,
     createdAt: start,
     updatedAt: start,
+    uid: 'session-$id',
+    dirty: false,
   );
 }
 
