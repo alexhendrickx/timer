@@ -59,7 +59,15 @@ class ReminderScheduler {
   }
 
   void _scheduleNext(DateTime from) {
-    final nextAt = from.add(settings.interval);
+    final now = _now();
+    var nextAt = from.add(settings.interval);
+    // A resumed (D2) session started well before now, so start+interval can
+    // already be in the past — re-arm one interval from now instead of
+    // silently dropping it (reminders only re-arm on fire, so a dropped first
+    // arm means no nudges at all for the rest of a long session).
+    if (!nextAt.isAfter(now)) {
+      nextAt = now.add(settings.interval);
+    }
     notifications.scheduleAt(
       nextAt,
       'Time to stand',

@@ -139,11 +139,20 @@ Future<void> main() async {
   reminderScheduler = ReminderScheduler(
     settings: reminderSettings,
     notifications: notificationsService,
-    onBreakDue: (firedAt) {
-      if (isForegrounded.value) {
+    onBreakDue: (firedAt) async {
+      // Can the overlay actually be seen right now? On iOS that's the
+      // foreground state; on Mac (a menu-bar app that stays "resumed" even
+      // with its window hidden) it's whether the single window is visible —
+      // otherwise the full-screen overlay would land on an invisible window
+      // and the user would get no nudge at all. Fall back to a notification.
+      final canShowOverlay = windowController == null
+          ? isForegrounded.value
+          : await windowManager.isVisible();
+      if (canShowOverlay) {
+        await windowController?.showMainWindow();
         router.push('/break');
       } else {
-        notificationsService.showNow(
+        await notificationsService.showNow(
           'Time to stand',
           'You have been tracking for a while — take a short break.',
         );

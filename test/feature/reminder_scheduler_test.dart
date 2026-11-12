@@ -57,4 +57,14 @@ void main() {
     scheduler.onSettingsChanged();
     expect(fakePort.lastScheduledAt, DateTime(2026, 11, 2, 9, 40));
   });
+
+  test('starting a resumed (stale) session schedules from now, not the past',
+      () {
+    // A D2-resumed session started hours before "now"; the next break must
+    // land one interval from now, never silently drop because start+interval
+    // is already in the past.
+    now = DateTime(2026, 11, 2, 12, 0);
+    scheduler.onTimerStarted(DateTime(2026, 11, 2, 9, 0));
+    expect(fakePort.lastScheduledAt, DateTime(2026, 11, 2, 13, 30));
+  });
 }
