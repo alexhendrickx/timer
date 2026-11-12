@@ -1,6 +1,6 @@
 # Project instructions — timer
 
-A lightweight, **fully on-device**, **cross-platform** time tracker for **iPhone
+A lightweight, **local-first**, **cross-platform** time tracker for **iPhone
 and Mac** from one Flutter/Dart codebase. It records work sessions tagged by
 activity/client, reminds you to take breaks, and exports clean reports. The
 guiding goal: radically simple and fast — big buttons, one tap/one key to start,
@@ -13,7 +13,7 @@ syncs the user's own data between their devices via their **Supabase** backend
 `go_router`, token-based `AppColors` + `buildAppTheme`). The UI is touch-first and
 platform-adaptive (iPhone tiles / Mac full-width bars + menu bar).
 
-Design: `docs/superpowers/specs/2026-10-31-local-time-tracker-design.md`.
+Design: `docs/superpowers/specs/2026-11-02-cross-platform-redesign-design.md`.
 Build plans: `.claude/state/plans/` (one per app version, run in order).
 
 ## Coding principles (always apply)
