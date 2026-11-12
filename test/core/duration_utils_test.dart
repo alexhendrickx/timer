@@ -21,6 +21,20 @@ void main() {
     });
   });
 
+  group('roundToNearest', () {
+    test('default 15-min step rounds 22 min to nearest 15-min mark', () {
+      expect(roundToNearest(1320), 900); // 22:00 -> nearest 15-min is 15:00
+      expect(roundToNearest(1320, 1800), 1800); // explicit 30-min step rounds up
+      expect(roundToNearest(0), 0);
+    });
+    test('negative clamps to zero', () {
+      expect(roundToNearest(-5), 0);
+    });
+    test('ties round up', () {
+      expect(roundToNearest(450, 900), 900); // 7:30 -> 15:00 at 15-min step
+    });
+  });
+
   group('formatHoursMinutes', () {
     test('formatHoursMinutes of 34200s is 9:30', () {
       expect(formatHoursMinutes(34200), '9:30');
