@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:timer/core/services/database/app_database.dart';
 import 'package:timer/core/services/storage_location_service.dart';
 import 'package:timer/feature/activities/data/activity_repository.dart';
+import 'package:timer/feature/history/data/history_repository.dart';
 import 'package:timer/feature/tracker/data/session_repository.dart';
 import 'package:timer/feature/tracker/service/timer_engine.dart';
 import 'package:timer/main.dart';
@@ -16,6 +17,7 @@ TimerApp _buildApp(AppDatabase database) {
     database: database,
     activityRepository: ActivityRepository(database),
     sessionRepository: sessionRepository,
+    historyRepository: HistoryRepository(database),
     timerEngine: TimerEngine(sessionRepository),
   );
 }

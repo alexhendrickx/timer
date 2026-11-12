@@ -1,6 +1,8 @@
 import 'package:go_router/go_router.dart';
 
 import '../../feature/activities/presentation/activities_screen.dart';
+import '../../feature/history/presentation/history_screen.dart';
+import '../../feature/history/presentation/reports_screen.dart';
 import '../../feature/settings/presentation/settings_screen.dart';
 import '../../feature/tracker/presentation/break_overlay.dart';
 import '../../feature/tracker/presentation/home_screen.dart';
@@ -24,6 +26,16 @@ GoRouter buildAppRouter({List<RouteBase> platformRoutes = const []}) {
       GoRoute(
         path: '/activities',
         builder: (context, state) => const ActivitiesScreen(),
+      ),
+      GoRoute(
+        path: '/history',
+        builder: (context, state) => HistoryScreen(
+          initialActivityId: state.extra is int ? state.extra as int : null,
+        ),
+      ),
+      GoRoute(
+        path: '/reports',
+        builder: (context, state) => const ReportsScreen(),
       ),
       GoRoute(
         path: '/settings',

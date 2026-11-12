@@ -164,6 +164,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'History',
+            onPressed: () => context.push('/history'),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Settings',
             onPressed: () => context.go('/settings'),
@@ -223,6 +228,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               repo: activityRepo,
                               existing: activity,
                             ),
+                    onViewHistory: () =>
+                        context.push('/history', extra: activity.id),
                   );
                 },
               );

@@ -23,6 +23,7 @@ import 'core/services/notifications_service.dart';
 import 'core/services/storage_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'feature/activities/data/activity_repository.dart';
+import 'feature/history/data/history_repository.dart';
 import 'feature/settings/data/reminder_settings.dart';
 import 'feature/tracker/data/session_repository.dart';
 import 'feature/tracker/service/reminder_scheduler.dart';
@@ -38,6 +39,7 @@ Future<void> main() async {
 
   final activityRepository = ActivityRepository(database);
   final sessionRepository = SessionRepository(database);
+  final historyRepository = HistoryRepository(database);
   final timerEngine = TimerEngine(sessionRepository);
   // Built once and shared (not re-created per rebuild) so its in-flight
   // start guard (D1) actually dedups races — the iOS intent handler below
@@ -211,6 +213,7 @@ Future<void> main() async {
     database: database,
     activityRepository: activityRepository,
     sessionRepository: sessionRepository,
+    historyRepository: historyRepository,
     timerEngine: timerEngine,
     startCoordinator: startCoordinator,
     reminderSettings: reminderSettings,
@@ -239,6 +242,7 @@ class TimerApp extends StatefulWidget {
     required AppDatabase database,
     required ActivityRepository activityRepository,
     required SessionRepository sessionRepository,
+    required HistoryRepository historyRepository,
     required TimerEngine timerEngine,
     StartCoordinator? startCoordinator,
     ReminderSettings? reminderSettings,
@@ -255,6 +259,7 @@ class TimerApp extends StatefulWidget {
       database: database,
       activityRepository: activityRepository,
       sessionRepository: sessionRepository,
+      historyRepository: historyRepository,
       timerEngine: timerEngine,
       startCoordinator: startCoordinator ?? StartCoordinator(timerEngine),
       reminderSettings: settings,
@@ -277,6 +282,7 @@ class TimerApp extends StatefulWidget {
     required this.database,
     required this.activityRepository,
     required this.sessionRepository,
+    required this.historyRepository,
     required this.timerEngine,
     required this.startCoordinator,
     required this.reminderSettings,
@@ -291,6 +297,7 @@ class TimerApp extends StatefulWidget {
   final AppDatabase database;
   final ActivityRepository activityRepository;
   final SessionRepository sessionRepository;
+  final HistoryRepository historyRepository;
   final TimerEngine timerEngine;
   final StartCoordinator startCoordinator;
   final ReminderSettings reminderSettings;
@@ -351,6 +358,7 @@ class _TimerAppState extends State<TimerApp> with WidgetsBindingObserver {
         Provider<AppDatabase>.value(value: widget.database),
         Provider<ActivityRepository>.value(value: widget.activityRepository),
         Provider<SessionRepository>.value(value: widget.sessionRepository),
+        Provider<HistoryRepository>.value(value: widget.historyRepository),
         ChangeNotifierProvider<TimerEngine>.value(value: widget.timerEngine),
         Provider<StartCoordinator>.value(value: widget.startCoordinator),
         Provider<ReminderSettings>.value(value: widget.reminderSettings),
