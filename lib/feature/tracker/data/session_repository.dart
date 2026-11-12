@@ -33,6 +33,7 @@ class SessionRepository {
         .write(SessionsCompanion(
       lastSeenAt: Value(seenAt),
       updatedAt: Value(seenAt),
+      dirty: const Value(true),
     ));
   }
 
@@ -48,6 +49,7 @@ class SessionRepository {
       durationSeconds: Value(seconds),
       lastSeenAt: Value(end),
       updatedAt: Value(end),
+      dirty: const Value(true),
     ));
   }
 
@@ -57,6 +59,7 @@ class SessionRepository {
         .write(SessionsCompanion(
       note: Value(note),
       updatedAt: Value(DateTime.now()),
+      dirty: const Value(true),
     ));
   }
 

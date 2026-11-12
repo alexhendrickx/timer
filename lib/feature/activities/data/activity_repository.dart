@@ -31,14 +31,25 @@ class ActivityRepository {
     return count == 0;
   }
 
-  /// Hard-deletes [id]. Throws [ActivityHasSessionsError] when it has
+  /// Removes [id]. Throws [ActivityHasSessionsError] when it has
   /// sessions — the FK's `onDelete: restrict` is the backstop, but this
   /// check gives a clean error instead of a constraint failure.
+  ///
+  /// Soft-deletes (sets `deletedAt`) rather than a hard SQL delete, so the
+  /// removal propagates to other devices through sync (spec Sync —
+  /// Deletes/archive) instead of silently vanishing a row sync never saw.
   Future<void> delete(int id) async {
     if (!await canDelete(id)) {
       throw ActivityHasSessionsError(id);
     }
-    await (_db.delete(_db.activities)..where((a) => a.id.equals(id))).go();
+    final now = DateTime.now();
+    await (_db.update(_db.activities)..where((a) => a.id.equals(id))).write(
+      ActivitiesCompanion(
+        deletedAt: Value(now),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   /// Inserts a new active activity and returns its id.
@@ -59,13 +70,23 @@ class ActivityRepository {
         );
   }
 
-  Future<void> update(Activity activity) =>
-      _db.update(_db.activities).replace(activity);
+  Future<void> update(Activity activity) {
+    final now = DateTime.now();
+    return _db
+        .update(_db.activities)
+        .replace(activity.copyWith(updatedAt: now, dirty: true));
+  }
 
   /// Hides an activity from the picker; its sessions and totals are preserved.
   Future<void> archive(int id) {
-    return (_db.update(_db.activities)..where((a) => a.id.equals(id)))
-        .write(const ActivitiesCompanion(archived: Value(true)));
+    final now = DateTime.now();
+    return (_db.update(_db.activities)..where((a) => a.id.equals(id))).write(
+      ActivitiesCompanion(
+        archived: const Value(true),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   /// Active (non-archived) activities, name-sorted.
@@ -76,7 +97,7 @@ class ActivityRepository {
 
   SimpleSelectStatement<$ActivitiesTable, Activity> _activeQuery() {
     return _db.select(_db.activities)
-      ..where((a) => a.archived.equals(false))
+      ..where((a) => a.archived.equals(false) & a.deletedAt.isNull())
       ..orderBy([(a) => OrderingTerm(expression: a.name)]);
   }
 }
