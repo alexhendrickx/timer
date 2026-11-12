@@ -5,6 +5,21 @@ optional, background layer against **Alex's own Supabase project** — no
 other cloud, and nothing in this doc is required for the app to work: with
 no config, sync is disabled and the app behaves exactly like v0.8.
 
+## 0. Live project (provisioned 2026-11-12)
+
+The sync backend is **live**, sharing Alex's existing **`femmie`** Supabase
+project (free tier; timer + femmie coexist — no table-name collision, femmie's
+`public` only had `logs` / `key_material`).
+
+- **Project ref:** `xftklvzkkbwwlbzbfysi` (region eu-central-1)
+- **API URL:** `https://xftklvzkkbwwlbzbfysi.supabase.co`
+- **Applied:** `supabase/sync.sql` → tables `public.activities` + `public.sessions`
+  with RLS (4 policies each, `user_id = auth.uid()`). Security advisor: **0 lints**.
+- **Publishable key:** supplied out-of-band via `--dart-define` (not committed here).
+
+Still TODO (Alex): Sign in with Apple provider config (§3) + the on-device RLS
+sanity check (§2.4).
+
 ## 1. Credentials: `--dart-define`, never committed
 
 The app reads the Supabase URL and anon (publishable) key at compile time:
