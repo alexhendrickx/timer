@@ -43,11 +43,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
   _Period _period = _Period.month;
   int? _activityId;
 
+  // Futures are held in state (not rebuilt inline) so an unrelated rebuild
+  // never re-runs the grouped query or reloads the activity list; they are
+  // refreshed only when the period or activity filter actually changes.
+  late Future<List<Activity>> _activitiesFuture;
+  late Future<List<ActivityTotal>> _totalsFuture;
+
   @override
-  Widget build(BuildContext context) {
+  void initState() {
+    super.initState();
     final history = context.read<HistoryRepository>();
     final activityRepo = context.read<ActivityRepository>();
+    _activitiesFuture = activityRepo.activeActivities();
+    _totalsFuture = history.totals(range: _rangeFor(_period), activityId: _activityId);
+  }
 
+  void _refreshTotals() {
+    final history = context.read<HistoryRepository>();
+    setState(() {
+      _totalsFuture =
+          history.totals(range: _rangeFor(_period), activityId: _activityId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -67,11 +87,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ButtonSegment(value: _Period.all, label: Text('All time')),
               ],
               selected: {_period},
-              onSelectionChanged: (s) => setState(() => _period = s.first),
+              onSelectionChanged: (s) {
+                _period = s.first;
+                _refreshTotals();
+              },
             ),
           ),
           FutureBuilder<List<Activity>>(
-            future: activityRepo.activeActivities(),
+            future: _activitiesFuture,
             builder: (context, snapshot) {
               final activities = snapshot.data ?? const [];
               return Padding(
@@ -84,35 +107,35 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     for (final a in activities)
                       DropdownMenuItem(value: a.id, child: Text(a.name)),
                   ],
-                  onChanged: (id) => setState(() => _activityId = id),
+                  onChanged: (id) {
+                    _activityId = id;
+                    _refreshTotals();
+                  },
                 ),
               );
             },
           ),
           Expanded(
-            child: FutureBuilder<List<ActivityTotal>>(
-              future: history.totals(
-                range: _rangeFor(_period),
-                activityId: _activityId,
-              ),
-              builder: (context, snapshot) {
-                final totals = snapshot.data ?? const [];
-                if (totals.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No sessions in this period',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppColors.textSecondary),
-                    ),
-                  );
-                }
-                return FutureBuilder<List<Activity>>(
-                  future: activityRepo.activeActivities(),
-                  builder: (context, activitySnapshot) {
-                    final activities = activitySnapshot.data ?? const [];
-                    final activityById = {for (final a in activities) a.id: a};
+            child: FutureBuilder<List<Activity>>(
+              future: _activitiesFuture,
+              builder: (context, activitySnapshot) {
+                final activities = activitySnapshot.data ?? const [];
+                final activityById = {for (final a in activities) a.id: a};
+                return FutureBuilder<List<ActivityTotal>>(
+                  future: _totalsFuture,
+                  builder: (context, snapshot) {
+                    final totals = snapshot.data ?? const [];
+                    if (totals.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No sessions in this period',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                      );
+                    }
                     final colors = [
                       for (var i = 0; i < totals.length; i++)
                         colorForActivity(
@@ -127,6 +150,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         .where((t) => t.amount != null)
                         .fold<double>(0, (a, t) => a + t.amount!);
                     final hasAnyAmount = totals.any((t) => t.amount != null);
+                    // Show a currency unit on the grand total only when every
+                    // rated activity shares one label (mixed currencies can't
+                    // be summed into a single symbol).
+                    final ratedCurrencies = {
+                      for (final t in totals.where((t) => t.amount != null))
+                        activityById[t.activityId]?.currencyLabel,
+                    };
+                    final grandCurrency = ratedCurrencies.length == 1
+                        ? ratedCurrencies.first
+                        : null;
 
                     return SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
@@ -135,11 +168,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           Center(child: ActivityRingChart(totals: totals, colors: colors)),
                           const SizedBox(height: 24),
                           for (var i = 0; i < totals.length; i++)
-                            _TotalRow(total: totals[i], color: colors[i]),
+                            _TotalRow(
+                              total: totals[i],
+                              color: colors[i],
+                              currency:
+                                  activityById[totals[i].activityId]?.currencyLabel,
+                            ),
                           const Divider(height: 24),
                           _GrandTotalRow(
                             seconds: grandSeconds,
                             amount: hasAnyAmount ? grandAmount : null,
+                            currency: grandCurrency,
                           ),
                         ],
                       ),
@@ -155,11 +194,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 }
 
+/// Formats an amount with its currency label when one is set, e.g.
+/// `75.00 EUR`; bare `75.00` when the activity has no label.
+String _formatAmount(double amount, String? currency) {
+  final value = amount.toStringAsFixed(2);
+  return currency == null || currency.isEmpty ? value : '$value $currency';
+}
+
 class _TotalRow extends StatelessWidget {
-  const _TotalRow({required this.total, required this.color});
+  const _TotalRow({required this.total, required this.color, this.currency});
 
   final ActivityTotal total;
   final Color color;
+  final String? currency;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +232,7 @@ class _TotalRow extends StatelessWidget {
           Text(formatHoursMinutes(total.roundedSeconds)),
           if (total.amount != null) ...[
             const SizedBox(width: 12),
-            Text(total.amount!.toStringAsFixed(2)),
+            Text(_formatAmount(total.amount!, currency)),
           ],
         ],
       ),
@@ -194,10 +241,11 @@ class _TotalRow extends StatelessWidget {
 }
 
 class _GrandTotalRow extends StatelessWidget {
-  const _GrandTotalRow({required this.seconds, this.amount});
+  const _GrandTotalRow({required this.seconds, this.amount, this.currency});
 
   final int seconds;
   final double? amount;
+  final String? currency;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +259,7 @@ class _GrandTotalRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium),
             if (amount != null) ...[
               const SizedBox(width: 12),
-              Text(amount!.toStringAsFixed(2),
+              Text(_formatAmount(amount!, currency),
                   style: Theme.of(context).textTheme.titleMedium),
             ],
           ],

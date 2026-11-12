@@ -37,6 +37,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   late int? _activityId = widget.initialActivityId;
   final _aggregator = HistoryAggregator();
 
+  // The activity list for the filter dropdown is loaded once, not rebuilt
+  // inline on every drill-down/filter rebuild.
+  late final Future<List<Activity>> _activitiesFuture =
+      context.read<ActivityRepository>().activeActivities();
+
   void _drillTo(_HistoryMode mode, DateTime date) {
     setState(() {
       _mode = mode;
@@ -47,7 +52,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final history = context.read<HistoryRepository>();
-    final activityRepo = context.read<ActivityRepository>();
 
     return Scaffold(
       appBar: AppBar(
@@ -72,7 +76,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           _Breadcrumbs(mode: _mode, focusDate: _focusDate, onTap: _drillTo),
           FutureBuilder<List<Activity>>(
-            future: activityRepo.activeActivities(),
+            future: _activitiesFuture,
             builder: (context, snapshot) {
               final activities = snapshot.data ?? const [];
               return Padding(
