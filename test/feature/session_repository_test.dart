@@ -49,4 +49,12 @@ void main() {
     final s = await repo.openSession();
     expect(s!.lastSeenAt, DateTime(2026, 10, 31, 9, 30));
   });
+
+  test('setNote writes a note on the session', () async {
+    final id = await repo.startSession(
+        activityId: a, start: DateTime(2026, 10, 31, 9, 0));
+    await repo.setNote(id, 'Quick note');
+    final s = await repo.openSession();
+    expect(s!.note, 'Quick note');
+  });
 }

@@ -31,12 +31,18 @@ class TimerEngine extends ChangeNotifier {
   final DateTime Function() _now;
 
   Session? _running;
+  int? _lastSessionId;
   Timer? _ticker;
   ResumeDecision? _pendingOrphan;
   bool _resumeChecked = false;
 
   /// The open session, or null when idle.
   Session? get running => _running;
+
+  /// Id of the running session, or the most recently stopped one — the
+  /// target for a quick note added from the popover (running or
+  /// just-stopped). Null until a session has been started this run.
+  int? get currentSessionId => _running?.id ?? _lastSessionId;
 
   /// Exact time since the running session started; zero when idle.
   Duration get elapsed =>
@@ -55,6 +61,7 @@ class TimerEngine extends ChangeNotifier {
     }
     await _repo.startSession(activityId: activityId, start: _now());
     _running = await _repo.openSession();
+    _lastSessionId = _running?.id;
     _startTicking();
     notifyListeners();
   }
@@ -91,6 +98,7 @@ class TimerEngine extends ChangeNotifier {
   Future<void> resumeKeepRunning() async {
     if (_pendingOrphan == null) return;
     _running = await _repo.openSession();
+    _lastSessionId = _running?.id;
     _pendingOrphan = null;
     if (_running != null) {
       _startTicking();

@@ -102,6 +102,18 @@ void main() {
     engine.dispose();
   });
 
+  test('currentSessionId is the running session, then the last stopped one',
+      () async {
+    final engine = TimerEngine(repo, now: () => DateTime(2026, 10, 31, 9, 0));
+    expect(engine.currentSessionId, isNull);
+    await engine.start(a);
+    final runningId = engine.running!.id;
+    expect(engine.currentSessionId, runningId);
+    await engine.stop();
+    expect(engine.currentSessionId, runningId);
+    engine.dispose();
+  });
+
   test('resumeKeepRunning keeps the open session running', () async {
     var clock = DateTime(2026, 10, 31, 17, 0);
     final engine = TimerEngine(repo, now: () => clock);
