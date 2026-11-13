@@ -7,7 +7,7 @@ import WidgetKit
   // Must match the entitlement in Runner.entitlements and the widget
   // extension's own entitlement (once that target exists — see
   // ios/TimerWidget/README.md).
-  static let appGroupId = "group.com.alexhendrickx.timer"
+  static let appGroupId = "group.be.alexhendrickx.timer"
 
   /// A `timer://` link that arrived before Flutter's `timer/deep_link`
   /// channel was listening (cold launch) — Dart pulls this once via

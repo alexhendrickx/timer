@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.alexhendrickx.timer</string>
+		<string>group.be.alexhendrickx.timer</string>
 	</array>
 </dict>
 </plist>
