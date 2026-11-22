@@ -21,24 +21,20 @@ Follow `ios/TimerWidget/README.md`:
    uncheck "Include Configuration Intent".
 2. Replace the generated `TimerWidget.swift` with this repo's version; add
    `StartActivityIntent.swift` to the new target.
-3. Add the App Group `group.com.alexhendrickx.timer` to the new target's
+3. Add the App Group `group.be.alexhendrickx.timer` to the new target's
    Signing & Capabilities (same as `Runner`).
 4. Confirm the extension is in the main app's "Embed App Extensions" phase.
 5. On a real device confirm automatic signing provisions the *extension*
    target (only `Runner` has been confirmed from this environment).
 Until this is done, `flutter build ios` is unaffected but no widget appears.
 
-### A2. Sign in with Apple capability (iOS + macOS)
-From `docs/superpowers/sync/supabase-setup.md` §3 — needs the Apple
-Developer account:
-1. Enable **Sign in with Apple** for the iOS *and* macOS App IDs.
-2. In Xcode add the **Sign in with Apple** capability to both `Runner`
-   (iOS) and `Runner` (macOS) targets (writes `com.apple.developer.applesignin`).
-3. Supabase dashboard → Authentication → Providers → Apple: fill Services ID,
-   Team ID, Key ID, `.p8` private key; add the bundle id as an authorized
-   client.
-Without the entitlement the native call fails with
-`AuthorizationErrorCode.unknown` on both platforms at runtime.
+### A2. Sign in with Apple (native only, no Services ID or .p8)
+The app signs in natively (`signInWithIdToken`), so Supabase needs only the
+bundle id as a client ID. The entitlement is already in both `Runner` targets.
+1. developer.apple.com → Identifiers → `be.alexhendrickx.timer` → tick
+   **Sign in with Apple** (one App ID serves iOS and macOS).
+2. Supabase dashboard (femmie) → Authentication → Providers → Apple → enable,
+   **Client IDs** = `be.alexhendrickx.timer`. Leave the OAuth fields empty.
 
 ### A3. Supabase RLS second-user check
 From `supabase-setup.md` §2.4. Schema + RLS are already applied live
@@ -107,14 +103,23 @@ only user B's rows.
 - [ ] **D4. Signed out**: with no sign-in the app makes zero network calls and
   behaves exactly as v0.8.
 
-## E. Optional — signed & notarized builds (needs the Apple account)
+## E. Ship to TestFlight
 
-Not required to run the app locally; required to distribute it.
-- [ ] **E1.** Configure signing identities for the macOS and iOS targets in Xcode.
-- [ ] **E2.** `flutter build macos --release` → archive, notarize, staple;
-  `flutter build ios --release`.
-- [ ] **E3.** Confirm the macOS `.app` passes a clean Gatekeeper launch and the
-  iOS build installs on-device.
+One-time:
+- [ ] **E1.** App Store Connect → Apps → **+** → New App, platforms iOS and
+  macOS, bundle id `be.alexhendrickx.timer`, SKU `timer`.
+- [ ] **E2.** Users and Access → Integrations → App Store Connect API →
+  generate a key with role **App Manager**. Save the `.p8` to
+  `~/.appstoreconnect/private_keys/`, then
+  `cp config/release.env.example config/release.env` and fill in the key id,
+  issuer id and path.
+- [ ] **E3.** `config/dart_defines.json` holds the Supabase URL + publishable
+  key (gitignored; copy from `config/dart_defines.example.json`).
+
+Every release:
+- [ ] `tool/release.sh ios` (or `macos`, `all`). It archives with the API key,
+  lets Xcode create the App Store profiles, and uploads. Build number is the
+  UTC timestamp. `DRY_RUN=1` exports locally without uploading.
 
 ---
 

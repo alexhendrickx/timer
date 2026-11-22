@@ -46,3 +46,7 @@ app.*.map.json
 
 # Superpowers SDD scratch workspace (ledger, review packages)
 .superpowers/
+
+# Release secrets (see config/*.example)
+/config/release.env
+/config/dart_defines.json

@@ -5,7 +5,7 @@
 
 ## Apple / Supabase setup
 - [ ] Create iOS TimerWidget Xcode target (`ios/TimerWidget/README.md`)
-- [ ] Enable Sign in with Apple: iOS + macOS App IDs + Xcode entitlements + Supabase Apple provider
+- [ ] Enable Sign in with Apple: tick it on the App ID + Supabase Apple provider client id (checklist A2)
 - [ ] RLS second-user check in Supabase
 
 ## On-device QA
@@ -15,6 +15,9 @@
 
 ## Optional / polish
 - [ ] Fresh review of v1.0.0 diff (only self-reviewed)
-- [ ] Code-sign + notarize for distribution
+- [ ] TestFlight: App Store Connect app record + API key, then `tool/release.sh all` (checklist E)
+- [ ] Mac data folder: sandbox loses a user-picked folder after relaunch (no security-scoped bookmark)
+- [ ] In-app account deletion (App Review 5.1.1(v)); femmie `auth.users` is shared, delete only timer rows + the user
+- [ ] Replace placeholder iOS launch image
 
 Details: `docs/RELEASE-CHECKLIST.md`.
