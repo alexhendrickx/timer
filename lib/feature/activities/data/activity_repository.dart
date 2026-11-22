@@ -99,6 +99,14 @@ class ActivityRepository {
     _onWrite();
   }
 
+  /// True when the table holds any row at all: active, archived, or
+  /// soft-deleted. Onboarding uses it to tell a new install from an
+  /// existing user who archived everything.
+  Future<bool> hasAnyActivity() async {
+    final row = await (_db.select(_db.activities)..limit(1)).getSingleOrNull();
+    return row != null;
+  }
+
   /// Active (non-archived) activities, name-sorted.
   Future<List<Activity>> activeActivities() => _activeQuery().get();
 

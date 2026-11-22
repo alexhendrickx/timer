@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 
+import '../../routing/auth_callback.dart';
 import 'quick_start_intent_handler.dart';
 
 /// Parses a `timer://quick-start[?activityId=<id>]` deep link (from the
@@ -11,6 +12,17 @@ QuickStartIntent parseDeepLink(String url) {
   final uri = Uri.parse(url);
   final raw = uri.queryParameters['activityId'];
   return QuickStartIntent(activityId: raw == null ? null : int.tryParse(raw));
+}
+
+/// The quick-start intent for [url], or null when the link is not ours:
+/// `timer://auth-callback` belongs to Supabase, and any other scheme (the
+/// Google redirect) to its own plugin.
+QuickStartIntent? quickStartIntentFor(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.scheme != 'timer' || isAuthCallbackUri(uri)) {
+    return null;
+  }
+  return parseDeepLink(url);
 }
 
 /// Listens on the `timer/deep_link` channel (set up in
@@ -32,13 +44,18 @@ class DeepLinkListener {
   /// screen rather than a blank first frame.
   Future<void> processInitialLink() async {
     final initial = await _channel.invokeMethod<String>('getInitialLink');
-    if (initial != null) await _handler.handle(parseDeepLink(initial));
+    if (initial != null) await _handle(initial);
   }
 
   Future<dynamic> _onMethodCall(MethodCall call) async {
     if (call.method == 'onDeepLink') {
-      await _handler.handle(parseDeepLink(call.arguments as String));
+      await _handle(call.arguments as String);
     }
     return null;
+  }
+
+  Future<void> _handle(String url) async {
+    final intent = quickStartIntentFor(url);
+    if (intent != null) await _handler.handle(intent);
   }
 }

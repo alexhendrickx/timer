@@ -50,3 +50,4 @@ app.*.map.json
 # Release secrets (see config/*.example)
 /config/release.env
 /config/dart_defines.json
+/config/google.xcconfig

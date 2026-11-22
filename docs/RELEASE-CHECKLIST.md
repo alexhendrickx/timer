@@ -36,6 +36,39 @@ bundle id as a client ID. The entitlement is already in both `Runner` targets.
 2. Supabase dashboard (femmie) → Authentication → Providers → Apple → enable,
    **Client IDs** = `be.alexhendrickx.timer`. Leave the OAuth fields empty.
 
+### A2b. Email sign-in (Supabase + Resend SMTP)
+1. Supabase (femmie) → Authentication → URL Configuration → Redirect URLs:
+   add `timer://auth-callback`. Without it, confirmation and reset links
+   open femmie's Site URL instead of the app.
+2. Authentication → Providers → Email: enabled, "Confirm email" on, minimum
+   password length 8.
+3. resend.com: add and verify the sending domain, then create an API key.
+4. Supabase → Authentication → Emails → SMTP Settings: enable custom SMTP.
+   Host `smtp.resend.com`, port `465`, username `resend`, password = the API
+   key, sender = an address on the verified domain. Supabase's built-in
+   mailer sends only a few emails per hour.
+5. Authentication → Rate Limits: raise "emails per hour" once SMTP works.
+6. femmie and Timer share `auth.users` and the email templates. A femmie
+   account signs in to Timer with the same email and password.
+
+### A2c. Google sign-in (Google Cloud OAuth clients)
+1. console.cloud.google.com → APIs & Services → OAuth consent screen:
+   set it up with the scopes `email`, `profile`, `openid`.
+2. Credentials → Create OAuth client ID → **Web application**. This is
+   `GOOGLE_WEB_CLIENT_ID`. Keep its client secret for step 4.
+3. Create OAuth client ID → **iOS**, bundle id `be.alexhendrickx.timer`.
+   This is `GOOGLE_IOS_CLIENT_ID`. The Mac build uses it too.
+4. Supabase → Authentication → Providers → Google: enable. Client IDs =
+   `<web client id>,<ios client id>` (web first). Client secret = the web
+   client's secret. Leave "Skip nonce check" off: the app sends a nonce.
+5. `config/dart_defines.json`: add `GOOGLE_IOS_CLIENT_ID` and
+   `GOOGLE_WEB_CLIENT_ID`.
+6. `cp config/google.xcconfig.example config/google.xcconfig` and fill in
+   the iOS client id and its reversed form
+   (`com.googleusercontent.apps.<id>`). The file is gitignored.
+7. Build with `--dart-define-from-file=config/dart_defines.json`. With
+   either define missing, the Google button is hidden.
+
 ### A3. Supabase RLS second-user check
 From `supabase-setup.md` §2.4. Schema + RLS are already applied live
 (project `femmie`, ref `xftklvzkkbwwlbzbfysi`, security advisor 0 lints).
@@ -121,6 +154,27 @@ Every release:
   lets Xcode create the App Store profiles, and uploads. Build number is the
   UTC timestamp. `DRY_RUN=1` exports locally without uploading.
 
+## F. Sign-in and onboarding (needs A2, A2b, A2c)
+
+- [ ] **Fresh install** (delete the app and its data folder): onboarding
+  shows, the two preselected activities are created, "Skip setup" and
+  "Done" both land on Home, and it does not show again on relaunch.
+- [ ] **Upgrade over existing data**: onboarding does not show.
+- [ ] **Apple** sign-in works on iPhone and Mac (now with a nonce).
+- [ ] **Google** sign-in works on iPhone and Mac; cancel shows no error.
+- [ ] **Email**: create account → the link in the mail opens the app and
+  signs in. Sign out, sign in with the password. Keychain offers to save
+  and to fill the password.
+- [ ] **Forgot password**: the link opens "Set new password"; the new
+  password works.
+- [ ] **Old or reused link**: opening it does nothing harmful; "Resend"
+  and "Back to sign in" still work.
+- [ ] **Open Mail** brings Mail to the front on iPhone and Mac with no
+  error dialog.
+- [ ] **Quick-start links still work** (Action button, Siri, widget tile):
+  they open the picker, not a sign-in screen.
+- [ ] **Signed out**: no network traffic until a sign-in button is tapped.
+
 ---
 
 ## Automated gates (done headlessly in this repo — all green)
@@ -134,6 +188,6 @@ for the captured outputs.
 - `flutter build ios --simulator` → succeeds.
 - App icon generated for iOS + macOS (`assets/images/app_icon.png`, applied
   via `flutter_launcher_icons`); version `1.0.0+10`.
-- First-run guard: Home shows an actionable "Add your first activity" button
+- First run: a 3-step onboarding (activities, optional sync, quick start); Home still shows an actionable "Add your first activity" button
   (iPhone sheet / Mac Activities screen) and a dismissible data-folder
   fallback banner on Mac.
