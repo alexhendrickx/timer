@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/storage_location_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../sync/presentation/widgets/sign_in_buttons.dart';
 import '../../sync/service/auth_service.dart';
 import '../../tracker/service/reminder_scheduler.dart';
 import '../data/reminder_settings.dart';
@@ -156,14 +157,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   .bodyMedium
                   ?.copyWith(color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => _toggleSignIn(auth),
-              icon: Icon(auth.isSignedIn ? Icons.logout : Icons.apple),
-              label: Text(
-                auth.isSignedIn ? 'Sign out' : 'Sign in with Apple to sync',
+            const SizedBox(height: 12),
+            if (auth.isSignedIn) ...[
+              Text(
+                auth.email ?? 'Signed in',
+                key: const Key('settings-signed-in-email'),
+                style: Theme.of(context).textTheme.bodyLarge,
               ),
-            ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: auth.signOut,
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign out'),
+                ),
+              ),
+            ] else
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: SignInButtons(auth: auth),
+                ),
+              ),
           ],
         ],
       ),
@@ -187,14 +204,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     settings.stepSeconds = value;
     await settings.save();
     if (mounted) setState(() {});
-  }
-
-  Future<void> _toggleSignIn(AuthService auth) async {
-    if (auth.isSignedIn) {
-      await auth.signOut();
-    } else {
-      await auth.signInWithApple();
-    }
   }
 
   Future<void> _changeFolder(StorageLocationService storage) async {

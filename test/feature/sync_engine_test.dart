@@ -13,26 +13,36 @@ import 'package:timer/feature/sync/service/supabase_sync_port.dart';
 class _FakeAuthBackend implements SyncAuthBackend {
   @override
   String? currentUserId;
-  final _controller = StreamController<String?>.broadcast();
 
   @override
-  Stream<String?> get userIdChanges => _controller.stream;
+  String? get currentUserEmail => null;
+
+  final _controller = StreamController<AuthChange>.broadcast();
+
+  @override
+  Stream<AuthChange> get authChanges => _controller.stream;
 
   @override
   Future<String> signInWithIdToken({
+    IdTokenProvider provider = IdTokenProvider.apple,
     required String idToken,
+    String? accessToken,
     String? nonce,
   }) async {
     currentUserId = 'user-1';
-    _controller.add(currentUserId);
+    _controller.add(AuthChange(userId: currentUserId));
     return currentUserId!;
   }
 
   @override
   Future<void> signOut() async {
     currentUserId = null;
-    _controller.add(null);
+    _controller.add(const AuthChange(userId: null));
   }
+
+  // The email paths are not used by the sync tests.
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Fake [SyncPort] that round-trips every row through the REAL JSON

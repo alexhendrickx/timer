@@ -12,7 +12,7 @@ struct ActivitySnapshot: Decodable {
   let todaySeconds: Int
 }
 
-private let appGroupId = "group.com.alexhendrickx.timer"
+private let appGroupId = "group.be.alexhendrickx.timer"
 private let snapshotFileName = "activity_snapshot.json"
 
 func readActivitySnapshot() -> [ActivitySnapshot] {

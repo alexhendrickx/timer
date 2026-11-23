@@ -7,7 +7,7 @@ import WidgetKit
   // Must match the entitlement in Runner.entitlements and the widget
   // extension's own entitlement (once that target exists — see
   // ios/TimerWidget/README.md).
-  static let appGroupId = "group.com.alexhendrickx.timer"
+  static let appGroupId = "group.be.alexhendrickx.timer"
 
   /// A `timer://` link that arrived before Flutter's `timer/deep_link`
   /// channel was listening (cold launch) — Dart pulls this once via
@@ -15,6 +15,14 @@ import WidgetKit
   private static var pendingDeepLink: String?
 
   private var deepLinkChannel: FlutterMethodChannel?
+
+  /// `timer://` links other than the auth callback are quick-start links.
+  /// `timer://auth-callback` belongs to Supabase (through app_links) and any
+  /// other scheme (Google's redirect) to its own plugin.
+  private static func isQuickStartLink(_ url: URL) -> Bool {
+    return url.scheme?.lowercased() == "timer"
+      && url.host?.lowercased() != "auth-callback"
+  }
 
   override func application(
     _ application: UIApplication,
@@ -59,7 +67,7 @@ import WidgetKit
       self.deepLinkChannel = deepLinkChannel
     }
 
-    if let url = launchOptions?[.url] as? URL {
+    if let url = launchOptions?[.url] as? URL, AppDelegate.isQuickStartLink(url) {
       AppDelegate.pendingDeepLink = url.absoluteString
     }
 
@@ -75,6 +83,11 @@ import WidgetKit
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
+    guard AppDelegate.isQuickStartLink(url) else {
+      // Let the plugins see it. Without this call they never get a URL.
+      _ = super.application(app, open: url, options: options)
+      return true
+    }
     if let deepLinkChannel {
       deepLinkChannel.invokeMethod("onDeepLink", arguments: url.absoluteString)
     } else {

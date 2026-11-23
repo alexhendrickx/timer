@@ -1,0 +1,5 @@
+// Copy to config/google.xcconfig (gitignored) and fill in. Xcode reads it to
+// set GIDClientID and the Google URL scheme in both Info.plist files.
+// The Dart side reads the same ids from config/dart_defines.json.
+GOOGLE_IOS_CLIENT_ID = <ios-client-id>.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.<ios-client-id>

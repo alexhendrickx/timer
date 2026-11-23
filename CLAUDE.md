@@ -41,7 +41,8 @@ global instructions in `~/.claude/CLAUDE.md`.
 
 - Cross-platform targets: iPhone (iOS) and Mac (macOS) from one codebase.
   Networking is limited to the user's own Supabase project for sync
-  (`supabase_flutter`); no Firebase, no analytics/tracking, no other network calls.
+  (`supabase_flutter`) plus the Apple and Google sign-in SDKs, only when the
+  user taps sign-in; no Firebase, no analytics/tracking, no other network calls.
 - Local-first: local SQLite is the source of truth; the app must work fully
   offline and sync is a background extra (never blocks start/stop).
 - Never lose the exact recorded time — rounding is a view only.

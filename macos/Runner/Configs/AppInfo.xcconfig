@@ -8,7 +8,14 @@
 PRODUCT_NAME = timer
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.alexhendrickx.timer
+PRODUCT_BUNDLE_IDENTIFIER = be.alexhendrickx.timer
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.alexhendrickx. All rights reserved.
+
+// Google Sign-In ids for Info.plist. Placeholders keep the build valid when
+// Google is not configured; real values come from the gitignored
+// config/google.xcconfig.
+GOOGLE_IOS_CLIENT_ID = unconfigured
+GOOGLE_REVERSED_CLIENT_ID = be.alexhendrickx.timer.google-unconfigured
+#include? "../../../config/google.xcconfig"

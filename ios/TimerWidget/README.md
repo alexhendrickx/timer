@@ -16,7 +16,7 @@ that validates a hand-written target the way the GUI's template does).
 - `AppGroupStorage` (Dart) + the `timer/app_group` method channel in
   `AppDelegate.swift` resolve the app-group container path and reload the
   WidgetKit timelines after each write.
-- The `group.com.alexhendrickx.timer` app-group entitlement on the `Runner`
+- The `group.be.alexhendrickx.timer` app-group entitlement on the `Runner`
   target, confirmed to build and auto-sign for both the simulator and the
   connected physical iPhone.
 - The widget + intent Swift source, ready to compile once added to a
@@ -29,7 +29,7 @@ that validates a hand-written target the way the GUI's template does).
 2. Replace the generated `TimerWidget.swift` with this folder's version;
    add `StartActivityIntent.swift` to the new target.
 3. In the new target's **Signing & Capabilities**, add the same App Group
-   (`group.com.alexhendrickx.timer`) entitlement as `Runner`.
+   (`group.be.alexhendrickx.timer`) entitlement as `Runner`.
 4. Confirm the widget extension is embedded in the main app's "Embed
    App Extensions" build phase (Xcode adds this automatically when the
    target is created from the app).

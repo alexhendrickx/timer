@@ -20,15 +20,18 @@ import 'core/platform/mac/tray_controller.dart';
 import 'core/platform/mac/window_controller.dart';
 import 'core/platform/platform_shell.dart';
 import 'core/routing/app_router.dart';
+import 'core/routing/auth_callback.dart';
 import 'core/services/database/app_database.dart';
 import 'core/services/notifications_service.dart';
 import 'core/services/storage_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'feature/activities/data/activity_repository.dart';
 import 'feature/history/data/history_repository.dart';
+import 'feature/onboarding/data/onboarding_state.dart';
 import 'feature/settings/data/reminder_settings.dart';
 import 'feature/settings/data/rounding_settings.dart';
 import 'feature/sync/service/auth_service.dart';
+import 'feature/sync/service/google_credential_source.dart';
 import 'feature/sync/service/sync_engine.dart';
 import 'feature/sync/service/supabase_sync_port.dart';
 import 'feature/tracker/data/session_repository.dart';
@@ -41,6 +44,11 @@ import 'feature/tracker/service/timer_engine.dart';
 /// leaves sync disabled and the app purely local (spec Sync — Signed out).
 const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+/// Google sign-in is offered only when both are supplied; otherwise the
+/// button is hidden (spec: Sign-in methods — Google).
+const _googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+const _googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,9 +66,21 @@ Future<void> main() async {
     await supabase.Supabase.initialize(
       url: _supabaseUrl,
       publishableKey: _supabaseAnonKey,
+      authOptions: const supabase.FlutterAuthClientOptions(
+        // Only timer://auth-callback?code=... is exchanged for a session.
+        // A quick-start link or a link carrying a ready-made access_token
+        // never reaches Supabase.
+        detectSessionInUriPredicate: isAuthCodeCallbackUri,
+      ),
     );
     final client = supabase.Supabase.instance.client;
-    authService = AuthService(backend: SupabaseAuthBackend(client));
+    authService = AuthService(
+      backend: SupabaseAuthBackend(client),
+      getGoogleCredential: googleCredentialSourceFor(
+        iosClientId: _googleIosClientId,
+        webClientId: _googleWebClientId,
+      ),
+    );
     syncEngine = SyncEngine(
       db: database,
       auth: authService,
@@ -165,9 +185,28 @@ Future<void> main() async {
 
   // The seam itself: core routing (app_router.dart) carries no platform-UI
   // imports; macOS is the only platform that registers extra routes today.
-  router = buildAppRouter(
-    platformRoutes: windowController != null ? macRoutes(windowController) : const [],
+  // First run only: no onboarding_done pref, no activity row of any kind,
+  // and the data folder resolved normally.
+  final showOnboarding = await shouldShowOnboarding(
+    activityRepository,
+    dataFolderFellBack: storage.lastFallbackReason != null,
   );
+  router = buildAppRouter(
+    initialLocation: showOnboarding ? '/onboarding' : '/',
+    platformRoutes:
+        windowController != null ? macRoutes(windowController) : const [],
+  );
+
+  // A password-reset link signs the user in with a recovery session; this
+  // sends them to "Set new password". Wired only now that the router exists.
+  final auth = authService;
+  if (auth != null) {
+    routePasswordRecovery(
+      auth: auth,
+      router: router,
+      showWindow: windowController?.showMainWindow,
+    );
+  }
 
   // Break reminders: platform-free scheduler + the real notifications
   // adapter. A denied permission never blocks tracking or the in-app
