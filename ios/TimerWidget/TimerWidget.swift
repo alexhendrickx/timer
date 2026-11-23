@@ -102,6 +102,7 @@ struct TimerWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: kind, provider: TimerWidgetProvider()) { entry in
       TimerWidgetView(entry: entry)
+        .containerBackground(.fill.tertiary, for: .widget)
     }
     .configurationDisplayName("Timer Quick Start")
     .description("One-tap start for your activities.")
