@@ -57,9 +57,10 @@ class StartCoordinator {
   }
 
   /// Stops the currently running activity and starts [activityId]. Call
-  /// after the UI's D1 confirm for [StartKind.needsSwitchConfirm].
+  /// after the UI's D1 confirm for [StartKind.needsSwitchConfirm]. Goes
+  /// through [TimerEngine.switchTo] so the Live Activity is updated in
+  /// place instead of ended and started again.
   Future<void> confirmSwitch(int activityId) async {
-    await _engine.stop();
-    await _engine.start(activityId);
+    await _engine.switchTo(activityId);
   }
 }

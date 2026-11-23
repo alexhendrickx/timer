@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -24,5 +25,34 @@ class AppGroupStorage {
     final file = File('$containerPath/$_fileName');
     await file.writeAsString(json);
     await _channel.invokeMethod<void>('reloadWidgets');
+  }
+
+  static const _stopRequestFileName = 'stop_request.json';
+
+  /// The pending Live Activity stop request (see `StopRequestApplier`), or
+  /// null when there is none or the container can't be resolved. Bytes that
+  /// are not UTF-8 still come back as text, so the caller can throw the
+  /// file away as malformed.
+  static Future<String?> readStopRequest() async {
+    final file = await _stopRequestFile();
+    if (file == null || !await file.exists()) return null;
+    return utf8.decode(await file.readAsBytes(), allowMalformed: true);
+  }
+
+  /// Removes the stop request. Quiet when it is already gone.
+  static Future<void> deleteStopRequest() async {
+    final file = await _stopRequestFile();
+    if (file == null) return;
+    try {
+      await file.delete();
+    } on PathNotFoundException {
+      // Already gone.
+    }
+  }
+
+  static Future<File?> _stopRequestFile() async {
+    final containerPath = await _channel.invokeMethod<String>('containerPath');
+    if (containerPath == null) return null;
+    return File('$containerPath/$_stopRequestFileName');
   }
 }

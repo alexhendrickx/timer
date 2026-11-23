@@ -11,7 +11,10 @@ import 'package:window_manager/window_manager.dart';
 import 'core/platform/ios/app_group_storage.dart';
 import 'core/platform/ios/deep_link_listener.dart';
 import 'core/platform/ios/ios_platform_shell.dart';
+import 'core/platform/ios/live_activity_bridge.dart';
+import 'core/platform/ios/live_activity_mirror.dart';
 import 'core/platform/ios/quick_start_intent_handler.dart';
+import 'core/platform/ios/stop_request_applier.dart';
 import 'core/platform/ios/widget_snapshot_writer.dart';
 import 'core/platform/mac/hotkey_controller.dart';
 import 'core/platform/mac/mac_platform_shell.dart';
@@ -294,6 +297,31 @@ Future<void> main() async {
       sessionRepository: sessionRepository,
       writeSnapshot: AppGroupStorage.write,
     ).start();
+
+    // Live Activity (lock screen + Dynamic Island): mirrors the engine's
+    // running session. Its Stop button leaves a stop request in the app
+    // group. Both awaits run before the first frame on purpose: a session
+    // stopped from the lock screen while the app was dead is closed before
+    // Home's resume prompt (D2) can see it as an orphan, and the stale
+    // cleanup cannot race a start.
+    final liveActivity = LiveActivityChannel();
+    final liveActivityMirror = LiveActivityMirror(
+      engine: timerEngine,
+      activityRepository: activityRepository,
+      sessionRepository: sessionRepository,
+      bridge: liveActivity,
+    )..start();
+    final stopRequests = StopRequestApplier(
+      engine: timerEngine,
+      read: AppGroupStorage.readStopRequest,
+      delete: AppGroupStorage.deleteStopRequest,
+    );
+    liveActivity.onStopRequest = stopRequests.applyPending;
+    isForegrounded.addListener(() {
+      if (isForegrounded.value) stopRequests.applyPending();
+    });
+    await stopRequests.applyPending();
+    await liveActivityMirror.endStale();
   }
 
   runApp(TimerApp(
