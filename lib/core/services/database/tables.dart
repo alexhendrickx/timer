@@ -1,4 +1,8 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
+
+/// Generates the cross-device sync identity for a new row (v0.9.0 sync).
+const Uuid syncUuid = Uuid();
 
 /// A named thing a session is tagged with — a client or personal category.
 /// Deleting one that has sessions is not allowed (archived instead; spec D7).
@@ -17,6 +21,21 @@ class Activities extends Table {
 
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
+
+  /// Cross-device sync identity (autoincrement `id` differs per device).
+  /// `clientDefault` (not `withDefault`) so a fresh uuid is generated per
+  /// row at insert time, not baked once into the schema's SQL default.
+  TextColumn get uid => text().clientDefault(() => syncUuid.v4())();
+
+  /// LWW clock for sync conflict resolution (spec Sync — Conflict
+  /// resolution). Bumped by the repository on every write.
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Soft-delete marker — propagated by sync instead of a hard delete.
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  /// Local-only: true when this row needs pushing. Never synced itself.
+  BoolColumn get dirty => boolean().withDefault(const Constant(true))();
 }
 
 /// A recorded work session. Belongs wholly to its start day (spec D5).
@@ -44,4 +63,13 @@ class Sessions extends Table {
 
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
+
+  /// Cross-device sync identity (autoincrement `id` differs per device).
+  TextColumn get uid => text().clientDefault(() => syncUuid.v4())();
+
+  /// Soft-delete marker — propagated by sync instead of a hard delete.
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  /// Local-only: true when this row needs pushing. Never synced itself.
+  BoolColumn get dirty => boolean().withDefault(const Constant(true))();
 }

@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/platform/mac/window_controller.dart';
 import '../../../core/services/database/app_database.dart';
-import '../../../core/services/window_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/duration_utils.dart';
 import '../../activities/data/activity_repository.dart';
 import '../data/session_repository.dart';
+import '../service/start_coordinator.dart';
 import '../service/timer_engine.dart';
-import 'widgets/activity_picker.dart';
 
-/// The frameless menu-bar popover: pick an activity and Start, or Stop a
+/// The frameless menu-bar popover: pick an activity and Start (via
+/// [StartCoordinator], so D1's switch confirm applies everywhere), or Stop a
 /// running timer, jot a quick note on the running (or just-stopped) session,
 /// and open the full window. Shares providers with the main window, so state
 /// stays in sync between the two.
@@ -32,8 +33,8 @@ class _PopoverScreenState extends State<PopoverScreen> {
     super.dispose();
   }
 
-  // Seed the note field from the session's stored note the first time we see a
-  // given session, so switching sessions doesn't carry a stale note over.
+  // Seed the note field from the session's stored note the first time we see
+  // a given session, so switching sessions doesn't carry a stale note over.
   void _seedNote(TimerEngine engine) {
     final id = engine.currentSessionId;
     if (id == _noteSeededFor) return;
@@ -41,11 +42,49 @@ class _PopoverScreenState extends State<PopoverScreen> {
     _noteController.text = engine.running?.note ?? '';
   }
 
+  Future<void> _onStart(
+    StartCoordinator coordinator,
+    ActivityRepository repo,
+    int activityId,
+  ) async {
+    final outcome = await coordinator.requestStart(activityId);
+    if (outcome.kind != StartKind.needsSwitchConfirm) return;
+    final activities = await repo.activeActivities();
+    final runningName = activities
+        .where((a) => a.id == outcome.runningActivityId)
+        .map((a) => a.name)
+        .firstOrNull;
+    final nextName =
+        activities.where((a) => a.id == activityId).map((a) => a.name).firstOrNull;
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${runningName ?? 'A timer'} is running'),
+        content: Text('Stop it and start ${nextName ?? 'the new activity'}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Stop and start'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await coordinator.confirmSwitch(activityId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final engine = context.watch<TimerEngine>();
     final activities = context.read<ActivityRepository>();
     final sessions = context.read<SessionRepository>();
+    final coordinator = context.read<StartCoordinator>();
     final window = context.read<WindowController>();
     final running = engine.running;
     _seedNote(engine);
@@ -67,11 +106,10 @@ class _PopoverScreenState extends State<PopoverScreen> {
                 _IdleBlock(
                   repo: activities,
                   selectedId: _selectedActivityId,
-                  onChanged: (id) =>
-                      setState(() => _selectedActivityId = id),
+                  onChanged: (id) => setState(() => _selectedActivityId = id),
                   onStart: () {
                     final id = _selectedActivityId;
-                    if (id != null) engine.start(id);
+                    if (id != null) _onStart(coordinator, activities, id);
                   },
                 ),
               if (engine.currentSessionId != null) ...[
@@ -128,9 +166,14 @@ class _IdleBlock extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ActivityPicker(
-              activities: activities,
-              selectedId: selectedId,
+            DropdownButton<int>(
+              isExpanded: true,
+              value: selectedId,
+              hint: const Text('Choose an activity'),
+              items: [
+                for (final activity in activities)
+                  DropdownMenuItem(value: activity.id, child: Text(activity.name)),
+              ],
               onChanged: onChanged,
             ),
             const SizedBox(height: 12),

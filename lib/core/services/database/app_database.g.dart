@@ -88,6 +88,52 @@ class $ActivitiesTable extends Activities
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: () => syncUuid.v4(),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -97,6 +143,10 @@ class $ActivitiesTable extends Activities
     currencyLabel,
     archived,
     createdAt,
+    uid,
+    updatedAt,
+    deletedAt,
+    dirty,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -156,6 +206,30 @@ class $ActivitiesTable extends Activities
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
     return context;
   }
 
@@ -193,6 +267,22 @@ class $ActivitiesTable extends Activities
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
     );
   }
 
@@ -216,6 +306,21 @@ class Activity extends DataClass implements Insertable<Activity> {
   final String? currencyLabel;
   final bool archived;
   final DateTime createdAt;
+
+  /// Cross-device sync identity (autoincrement `id` differs per device).
+  /// `clientDefault` (not `withDefault`) so a fresh uuid is generated per
+  /// row at insert time, not baked once into the schema's SQL default.
+  final String uid;
+
+  /// LWW clock for sync conflict resolution (spec Sync — Conflict
+  /// resolution). Bumped by the repository on every write.
+  final DateTime updatedAt;
+
+  /// Soft-delete marker — propagated by sync instead of a hard delete.
+  final DateTime? deletedAt;
+
+  /// Local-only: true when this row needs pushing. Never synced itself.
+  final bool dirty;
   const Activity({
     required this.id,
     required this.name,
@@ -224,6 +329,10 @@ class Activity extends DataClass implements Insertable<Activity> {
     this.currencyLabel,
     required this.archived,
     required this.createdAt,
+    required this.uid,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.dirty,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -241,6 +350,12 @@ class Activity extends DataClass implements Insertable<Activity> {
     }
     map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['uid'] = Variable<String>(uid);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['dirty'] = Variable<bool>(dirty);
     return map;
   }
 
@@ -259,6 +374,12 @@ class Activity extends DataClass implements Insertable<Activity> {
           : Value(currencyLabel),
       archived: Value(archived),
       createdAt: Value(createdAt),
+      uid: Value(uid),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      dirty: Value(dirty),
     );
   }
 
@@ -275,6 +396,10 @@ class Activity extends DataClass implements Insertable<Activity> {
       currencyLabel: serializer.fromJson<String?>(json['currencyLabel']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      uid: serializer.fromJson<String>(json['uid']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
     );
   }
   @override
@@ -288,6 +413,10 @@ class Activity extends DataClass implements Insertable<Activity> {
       'currencyLabel': serializer.toJson<String?>(currencyLabel),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'uid': serializer.toJson<String>(uid),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'dirty': serializer.toJson<bool>(dirty),
     };
   }
 
@@ -299,6 +428,10 @@ class Activity extends DataClass implements Insertable<Activity> {
     Value<String?> currencyLabel = const Value.absent(),
     bool? archived,
     DateTime? createdAt,
+    String? uid,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    bool? dirty,
   }) => Activity(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -309,6 +442,10 @@ class Activity extends DataClass implements Insertable<Activity> {
         : this.currencyLabel,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
+    uid: uid ?? this.uid,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    dirty: dirty ?? this.dirty,
   );
   Activity copyWithCompanion(ActivitiesCompanion data) {
     return Activity(
@@ -323,6 +460,10 @@ class Activity extends DataClass implements Insertable<Activity> {
           : this.currencyLabel,
       archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
     );
   }
 
@@ -335,7 +476,11 @@ class Activity extends DataClass implements Insertable<Activity> {
           ..write('hourlyRate: $hourlyRate, ')
           ..write('currencyLabel: $currencyLabel, ')
           ..write('archived: $archived, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('uid: $uid, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty')
           ..write(')'))
         .toString();
   }
@@ -349,6 +494,10 @@ class Activity extends DataClass implements Insertable<Activity> {
     currencyLabel,
     archived,
     createdAt,
+    uid,
+    updatedAt,
+    deletedAt,
+    dirty,
   );
   @override
   bool operator ==(Object other) =>
@@ -360,7 +509,11 @@ class Activity extends DataClass implements Insertable<Activity> {
           other.hourlyRate == this.hourlyRate &&
           other.currencyLabel == this.currencyLabel &&
           other.archived == this.archived &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.uid == this.uid &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.dirty == this.dirty);
 }
 
 class ActivitiesCompanion extends UpdateCompanion<Activity> {
@@ -371,6 +524,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
   final Value<String?> currencyLabel;
   final Value<bool> archived;
   final Value<DateTime> createdAt;
+  final Value<String> uid;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<bool> dirty;
   const ActivitiesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -379,6 +536,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
     this.currencyLabel = const Value.absent(),
     this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
   });
   ActivitiesCompanion.insert({
     this.id = const Value.absent(),
@@ -388,6 +549,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
     this.currencyLabel = const Value.absent(),
     this.archived = const Value.absent(),
     required DateTime createdAt,
+    this.uid = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
   }) : name = Value(name),
        createdAt = Value(createdAt);
   static Insertable<Activity> custom({
@@ -398,6 +563,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
     Expression<String>? currencyLabel,
     Expression<bool>? archived,
     Expression<DateTime>? createdAt,
+    Expression<String>? uid,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<bool>? dirty,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -407,6 +576,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
       if (currencyLabel != null) 'currency_label': currencyLabel,
       if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
+      if (uid != null) 'uid': uid,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (dirty != null) 'dirty': dirty,
     });
   }
 
@@ -418,6 +591,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
     Value<String?>? currencyLabel,
     Value<bool>? archived,
     Value<DateTime>? createdAt,
+    Value<String>? uid,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<bool>? dirty,
   }) {
     return ActivitiesCompanion(
       id: id ?? this.id,
@@ -427,6 +604,10 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
       currencyLabel: currencyLabel ?? this.currencyLabel,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
+      uid: uid ?? this.uid,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      dirty: dirty ?? this.dirty,
     );
   }
 
@@ -454,6 +635,18 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
     return map;
   }
 
@@ -466,7 +659,11 @@ class ActivitiesCompanion extends UpdateCompanion<Activity> {
           ..write('hourlyRate: $hourlyRate, ')
           ..write('currencyLabel: $currencyLabel, ')
           ..write('archived: $archived, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('uid: $uid, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty')
           ..write(')'))
         .toString();
   }
@@ -589,6 +786,40 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: () => syncUuid.v4(),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -601,6 +832,9 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     lastSeenAt,
     createdAt,
     updatedAt,
+    uid,
+    deletedAt,
+    dirty,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -687,6 +921,24 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
     return context;
   }
 
@@ -736,6 +988,18 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
     );
   }
 
@@ -765,6 +1029,15 @@ class Session extends DataClass implements Insertable<Session> {
   final DateTime? lastSeenAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Cross-device sync identity (autoincrement `id` differs per device).
+  final String uid;
+
+  /// Soft-delete marker — propagated by sync instead of a hard delete.
+  final DateTime? deletedAt;
+
+  /// Local-only: true when this row needs pushing. Never synced itself.
+  final bool dirty;
   const Session({
     required this.id,
     required this.activityId,
@@ -776,6 +1049,9 @@ class Session extends DataClass implements Insertable<Session> {
     this.lastSeenAt,
     required this.createdAt,
     required this.updatedAt,
+    required this.uid,
+    this.deletedAt,
+    required this.dirty,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -796,6 +1072,11 @@ class Session extends DataClass implements Insertable<Session> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['uid'] = Variable<String>(uid);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['dirty'] = Variable<bool>(dirty);
     return map;
   }
 
@@ -815,6 +1096,11 @@ class Session extends DataClass implements Insertable<Session> {
           : Value(lastSeenAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      uid: Value(uid),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      dirty: Value(dirty),
     );
   }
 
@@ -834,6 +1120,9 @@ class Session extends DataClass implements Insertable<Session> {
       lastSeenAt: serializer.fromJson<DateTime?>(json['lastSeenAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      uid: serializer.fromJson<String>(json['uid']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
     );
   }
   @override
@@ -850,6 +1139,9 @@ class Session extends DataClass implements Insertable<Session> {
       'lastSeenAt': serializer.toJson<DateTime?>(lastSeenAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'uid': serializer.toJson<String>(uid),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'dirty': serializer.toJson<bool>(dirty),
     };
   }
 
@@ -864,6 +1156,9 @@ class Session extends DataClass implements Insertable<Session> {
     Value<DateTime?> lastSeenAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? uid,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    bool? dirty,
   }) => Session(
     id: id ?? this.id,
     activityId: activityId ?? this.activityId,
@@ -875,6 +1170,9 @@ class Session extends DataClass implements Insertable<Session> {
     lastSeenAt: lastSeenAt.present ? lastSeenAt.value : this.lastSeenAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    uid: uid ?? this.uid,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    dirty: dirty ?? this.dirty,
   );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
@@ -894,6 +1192,9 @@ class Session extends DataClass implements Insertable<Session> {
           : this.lastSeenAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
     );
   }
 
@@ -909,7 +1210,10 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('note: $note, ')
           ..write('lastSeenAt: $lastSeenAt, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('uid: $uid, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty')
           ..write(')'))
         .toString();
   }
@@ -926,6 +1230,9 @@ class Session extends DataClass implements Insertable<Session> {
     lastSeenAt,
     createdAt,
     updatedAt,
+    uid,
+    deletedAt,
+    dirty,
   );
   @override
   bool operator ==(Object other) =>
@@ -940,7 +1247,10 @@ class Session extends DataClass implements Insertable<Session> {
           other.note == this.note &&
           other.lastSeenAt == this.lastSeenAt &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.uid == this.uid &&
+          other.deletedAt == this.deletedAt &&
+          other.dirty == this.dirty);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
@@ -954,6 +1264,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<DateTime?> lastSeenAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String> uid;
+  final Value<DateTime?> deletedAt;
+  final Value<bool> dirty;
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.activityId = const Value.absent(),
@@ -965,6 +1278,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.lastSeenAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
   });
   SessionsCompanion.insert({
     this.id = const Value.absent(),
@@ -977,6 +1293,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.lastSeenAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.uid = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
   }) : activityId = Value(activityId),
        date = Value(date),
        startTime = Value(startTime),
@@ -993,6 +1312,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<DateTime>? lastSeenAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<String>? uid,
+    Expression<DateTime>? deletedAt,
+    Expression<bool>? dirty,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1005,6 +1327,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (lastSeenAt != null) 'last_seen_at': lastSeenAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (uid != null) 'uid': uid,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (dirty != null) 'dirty': dirty,
     });
   }
 
@@ -1019,6 +1344,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Value<DateTime?>? lastSeenAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String>? uid,
+    Value<DateTime?>? deletedAt,
+    Value<bool>? dirty,
   }) {
     return SessionsCompanion(
       id: id ?? this.id,
@@ -1031,6 +1359,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      uid: uid ?? this.uid,
+      deletedAt: deletedAt ?? this.deletedAt,
+      dirty: dirty ?? this.dirty,
     );
   }
 
@@ -1067,6 +1398,15 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
     return map;
   }
 
@@ -1082,7 +1422,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('note: $note, ')
           ..write('lastSeenAt: $lastSeenAt, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('uid: $uid, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty')
           ..write(')'))
         .toString();
   }
@@ -1109,6 +1452,10 @@ typedef $$ActivitiesTableCreateCompanionBuilder =
       Value<String?> currencyLabel,
       Value<bool> archived,
       required DateTime createdAt,
+      Value<String> uid,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
     });
 typedef $$ActivitiesTableUpdateCompanionBuilder =
     ActivitiesCompanion Function({
@@ -1119,6 +1466,10 @@ typedef $$ActivitiesTableUpdateCompanionBuilder =
       Value<String?> currencyLabel,
       Value<bool> archived,
       Value<DateTime> createdAt,
+      Value<String> uid,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
     });
 
 final class $$ActivitiesTableReferences
@@ -1186,6 +1537,26 @@ class $$ActivitiesTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1258,6 +1629,26 @@ class $$ActivitiesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ActivitiesTableAnnotationComposer
@@ -1293,6 +1684,18 @@ class $$ActivitiesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
 
   Expression<T> sessionsRefs<T extends Object>(
     Expression<T> Function($$SessionsTableAnnotationComposer a) f,
@@ -1355,6 +1758,10 @@ class $$ActivitiesTableTableManager
                 Value<String?> currencyLabel = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String> uid = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
               }) => ActivitiesCompanion(
                 id: id,
                 name: name,
@@ -1363,6 +1770,10 @@ class $$ActivitiesTableTableManager
                 currencyLabel: currencyLabel,
                 archived: archived,
                 createdAt: createdAt,
+                uid: uid,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                dirty: dirty,
               ),
           createCompanionCallback:
               ({
@@ -1373,6 +1784,10 @@ class $$ActivitiesTableTableManager
                 Value<String?> currencyLabel = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required DateTime createdAt,
+                Value<String> uid = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
               }) => ActivitiesCompanion.insert(
                 id: id,
                 name: name,
@@ -1381,6 +1796,10 @@ class $$ActivitiesTableTableManager
                 currencyLabel: currencyLabel,
                 archived: archived,
                 createdAt: createdAt,
+                uid: uid,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                dirty: dirty,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -1450,6 +1869,9 @@ typedef $$SessionsTableCreateCompanionBuilder =
       Value<DateTime?> lastSeenAt,
       required DateTime createdAt,
       required DateTime updatedAt,
+      Value<String> uid,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
     });
 typedef $$SessionsTableUpdateCompanionBuilder =
     SessionsCompanion Function({
@@ -1463,6 +1885,9 @@ typedef $$SessionsTableUpdateCompanionBuilder =
       Value<DateTime?> lastSeenAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String> uid,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
     });
 
 final class $$SessionsTableReferences
@@ -1538,6 +1963,21 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1619,6 +2059,21 @@ class $$SessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ActivitiesTableOrderingComposer get activityId {
     final $$ActivitiesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -1683,6 +2138,15 @@ class $$SessionsTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+
   $$ActivitiesTableAnnotationComposer get activityId {
     final $$ActivitiesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -1745,6 +2209,9 @@ class $$SessionsTableTableManager
                 Value<DateTime?> lastSeenAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> uid = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
               }) => SessionsCompanion(
                 id: id,
                 activityId: activityId,
@@ -1756,6 +2223,9 @@ class $$SessionsTableTableManager
                 lastSeenAt: lastSeenAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                uid: uid,
+                deletedAt: deletedAt,
+                dirty: dirty,
               ),
           createCompanionCallback:
               ({
@@ -1769,6 +2239,9 @@ class $$SessionsTableTableManager
                 Value<DateTime?> lastSeenAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<String> uid = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
               }) => SessionsCompanion.insert(
                 id: id,
                 activityId: activityId,
@@ -1780,6 +2253,9 @@ class $$SessionsTableTableManager
                 lastSeenAt: lastSeenAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                uid: uid,
+                deletedAt: deletedAt,
+                dirty: dirty,
               ),
           withReferenceMapper: (p0) => p0
               .map(

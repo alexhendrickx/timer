@@ -5,9 +5,26 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/storage_location_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../sync/service/auth_service.dart';
+import '../../tracker/service/reminder_scheduler.dart';
+import '../data/reminder_settings.dart';
+import '../data/rounding_settings.dart';
 
-/// Settings for v0.1.0: shows the current data folder and lets the user change
-/// it. Reminder intervals and the rest arrive in later versions.
+/// Common break-interval choices offered in Settings.
+const List<Duration> _reminderIntervalChoices = [
+  Duration(minutes: 15),
+  Duration(minutes: 30),
+  Duration(minutes: 45),
+  Duration(minutes: 60),
+  Duration(minutes: 90),
+  Duration(minutes: 120),
+];
+
+/// Rounding-step choices (seconds) offered in Settings — the step totals,
+/// reports, and exports round to (view only; spec D4).
+const List<int> _roundingStepChoices = [900, 1800, 3600];
+
+/// Settings: data folder + the break-reminder interval.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -23,6 +40,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final storage = context.read<StorageLocationService>();
     final folder = _justChangedTo ?? storage.currentFolder ?? 'Resolving…';
     final fallback = storage.lastFallbackReason;
+    final reminderSettings = context.read<ReminderSettings>();
+    final reminderScheduler = context.read<ReminderScheduler>();
+    final roundingSettings = context.read<RoundingSettings>();
+    // Null when Supabase wasn't configured at launch (no --dart-define
+    // URL/key) — sync is then simply absent from Settings, and the app
+    // behaves exactly like v0.8 (spec Sync — Signed out).
+    final auth = context.watch<AuthService?>();
 
     return Scaffold(
       appBar: AppBar(
@@ -71,9 +95,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ?.copyWith(color: AppColors.textSecondary),
             ),
           ],
+          const SizedBox(height: 32),
+          Text('Break reminders',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'A gentle full-screen nudge while a timer is running.',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          DropdownButton<Duration>(
+            value: reminderSettings.interval,
+            items: [
+              for (final choice in _reminderIntervalChoices)
+                DropdownMenuItem(
+                  value: choice,
+                  child: Text('Every ${choice.inMinutes} min'),
+                ),
+            ],
+            onChanged: (value) =>
+                _changeReminderInterval(reminderSettings, reminderScheduler, value),
+          ),
+          const SizedBox(height: 32),
+          Text('Rounding', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Totals, reports, and exports round sums to this step. '
+            'The exact recorded time is never changed.',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          DropdownButton<int>(
+            value: roundingSettings.stepSeconds,
+            items: [
+              for (final choice in _roundingStepChoices)
+                DropdownMenuItem(
+                  value: choice,
+                  child: Text('Nearest ${choice ~/ 60} min'),
+                ),
+            ],
+            onChanged: (value) => _changeRoundingStep(roundingSettings, value),
+          ),
+          if (auth != null) ...[
+            const SizedBox(height: 32),
+            Text('Sync', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              auth.isSignedIn
+                  ? 'Signed in — activities and sessions sync across your devices.'
+                  : 'Sign in to sync activities and sessions across your devices. '
+                      'Fully optional — the app works the same either way.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _toggleSignIn(auth),
+              icon: Icon(auth.isSignedIn ? Icons.logout : Icons.apple),
+              label: Text(
+                auth.isSignedIn ? 'Sign out' : 'Sign in with Apple to sync',
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _changeReminderInterval(
+    ReminderSettings settings,
+    ReminderScheduler scheduler,
+    Duration? value,
+  ) async {
+    if (value == null) return;
+    settings.interval = value;
+    await settings.save();
+    scheduler.onSettingsChanged();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _changeRoundingStep(RoundingSettings settings, int? value) async {
+    if (value == null) return;
+    settings.stepSeconds = value;
+    await settings.save();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleSignIn(AuthService auth) async {
+    if (auth.isSignedIn) {
+      await auth.signOut();
+    } else {
+      await auth.signInWithApple();
+    }
   }
 
   Future<void> _changeFolder(StorageLocationService storage) async {

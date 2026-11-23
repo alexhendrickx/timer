@@ -13,6 +13,15 @@ int roundToHalfHourSeconds(int totalSeconds) {
   return (totalSeconds / _halfHourSeconds).round() * _halfHourSeconds;
 }
 
+/// Rounds [totalSeconds] to the nearest [stepSeconds] (default 900s / 15
+/// min). Ties round **up**, same rule as [roundToHalfHourSeconds]. Used by
+/// history/report totals (sum-then-round, spec D4); [roundToHalfHourSeconds]
+/// stays for the existing 30-min call sites.
+int roundToNearest(int totalSeconds, [int stepSeconds = 900]) {
+  if (totalSeconds <= 0) return 0;
+  return (totalSeconds / stepSeconds).round() * stepSeconds;
+}
+
 /// `H:MM:SS` for the live timer, e.g. 8073 → `2:14:33`. Non-positive → `0:00:00`.
 String formatHms(int seconds) {
   if (seconds <= 0) return '0:00:00';

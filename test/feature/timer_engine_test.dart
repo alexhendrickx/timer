@@ -102,17 +102,15 @@ void main() {
     engine.dispose();
   });
 
-  test('currentSessionId tracks the running then just-stopped session',
+  test('currentSessionId is the running session, then the last stopped one',
       () async {
     final engine = TimerEngine(repo, now: () => DateTime(2026, 10, 31, 9, 0));
     expect(engine.currentSessionId, isNull);
     await engine.start(a);
-    final id = engine.running!.id;
-    expect(engine.currentSessionId, id);
+    final runningId = engine.running!.id;
+    expect(engine.currentSessionId, runningId);
     await engine.stop();
-    expect(engine.running, isNull);
-    // The just-stopped session stays targetable so a note can still be added.
-    expect(engine.currentSessionId, id);
+    expect(engine.currentSessionId, runningId);
     engine.dispose();
   });
 

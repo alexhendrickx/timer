@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timer/core/services/database/app_database.dart';
 import 'package:timer/feature/activities/data/activity_repository.dart';
+import 'package:timer/feature/tracker/data/session_repository.dart';
 
 void main() {
   late AppDatabase db;
@@ -13,6 +14,29 @@ void main() {
   });
 
   tearDown(() => db.close());
+
+  test('delete throws ActivityHasSessionsError when sessions exist, '
+      'and succeeds once they are gone', () async {
+    final id = await repo.create(name: 'Client X');
+    final sessions = SessionRepository(db);
+    final sessionId = await sessions.startSession(
+      activityId: id,
+      start: DateTime(2026, 11, 2, 9, 0),
+    );
+    await sessions.closeSession(sessionId, DateTime(2026, 11, 2, 10, 0));
+
+    expect(await repo.canDelete(id), false);
+    expect(
+      () => repo.delete(id),
+      throwsA(isA<ActivityHasSessionsError>()),
+    );
+
+    await (db.delete(db.sessions)..where((s) => s.id.equals(sessionId))).go();
+
+    expect(await repo.canDelete(id), true);
+    await repo.delete(id);
+    expect(await repo.activeActivities(), isEmpty);
+  });
 
   test('create then activeActivities returns it', () async {
     await repo.create(name: 'Client X');

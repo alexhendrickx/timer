@@ -14,9 +14,9 @@ void main() {
     await db.close();
   });
 
-  test('schemaVersion is 1', () {
+  test('schemaVersion is 2', () {
     final db = AppDatabase(NativeDatabase.memory());
-    expect(db.schemaVersion, 1);
+    expect(db.schemaVersion, 2);
     db.close();
   });
 }

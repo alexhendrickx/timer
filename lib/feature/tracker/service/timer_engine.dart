@@ -39,9 +39,9 @@ class TimerEngine extends ChangeNotifier {
   /// The open session, or null when idle.
   Session? get running => _running;
 
-  /// Id of the running session, or the most recently stopped one — the target
-  /// for a quick note added from the popover (running or just-stopped). Null
-  /// until a session has been started this run.
+  /// Id of the running session, or the most recently stopped one — the
+  /// target for a quick note added from the popover (running or
+  /// just-stopped). Null until a session has been started this run.
   int? get currentSessionId => _running?.id ?? _lastSessionId;
 
   /// Exact time since the running session started; zero when idle.
