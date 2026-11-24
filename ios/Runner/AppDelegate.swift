@@ -15,6 +15,7 @@ import WidgetKit
   private static var pendingDeepLink: String?
 
   private var deepLinkChannel: FlutterMethodChannel?
+  private var liveActivityChannel: FlutterMethodChannel?
 
   /// `timer://` links other than the auth callback are quick-start links.
   /// `timer://auth-callback` belongs to Supabase (through app_links) and any
@@ -65,6 +66,20 @@ import WidgetKit
         AppDelegate.pendingDeepLink = nil
       }
       self.deepLinkChannel = deepLinkChannel
+
+      // Live Activity: Flutter drives it over timer/live_activity (see
+      // LiveActivityController.swift). The Stop button's intent runs in
+      // this process, maybe off the main thread. Once it has written the
+      // stop request it calls this hook, so Flutter applies it now instead
+      // of on the next launch or resume.
+      liveActivityChannel = LiveActivityController.register(
+        with: controller.binaryMessenger
+      )
+      StopRequestFile.onWritten = { [weak self] in
+        DispatchQueue.main.async {
+          self?.liveActivityChannel?.invokeMethod("onStopRequest", arguments: nil)
+        }
+      }
     }
 
     if let url = launchOptions?[.url] as? URL, AppDelegate.isQuickStartLink(url) {

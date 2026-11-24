@@ -21,3 +21,4 @@
 - [ ] Replace placeholder iOS launch image
 
 Details: `docs/RELEASE-CHECKLIST.md`.
+- Sync: closeSession sets updatedAt to the (past) end time, so a Mac pulling with updated_at > since misses a late-applied stop (Live Activity, stop-at-last-seen). Set updatedAt to now.

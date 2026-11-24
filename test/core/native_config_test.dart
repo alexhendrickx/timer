@@ -81,4 +81,46 @@ void main() {
       expect(read(path), contains('com.google.GIDSignIn'), reason: path);
     }
   });
+
+  test('iOS declares Live Activity support', () {
+    expect(
+      read('ios/Runner/Info.plist'),
+      matches(RegExp(r'<key>NSSupportsLiveActivities</key>\s*<true/>')),
+    );
+  });
+
+  test('the shared Live Activity files are compiled into both iOS targets',
+      () {
+    final project = read('ios/Runner.xcodeproj/project.pbxproj');
+    // One build file per target that compiles the source.
+    int buildFiles(String name) => RegExp(
+          '${RegExp.escape(name)} in Sources \\*/ = \\{isa = PBXBuildFile',
+        ).allMatches(project).length;
+
+    expect(buildFiles('TimerActivityAttributes.swift'), 2);
+    expect(buildFiles('StopTimerIntent.swift'), 2);
+    expect(buildFiles('LiveActivityController.swift'), 1);
+    expect(buildFiles('TimerLiveActivity.swift'), 1);
+  });
+
+  test('Swift and Dart agree on the Live Activity contract', () {
+    final controller = read('ios/Runner/LiveActivityController.swift');
+    final intent = read('ios/Shared/StopTimerIntent.swift');
+    final bridge = read('lib/core/platform/ios/live_activity_bridge.dart');
+    final storage = read('lib/core/platform/ios/app_group_storage.dart');
+
+    expect(controller, contains('"timer/live_activity"'));
+    expect(bridge, contains("'timer/live_activity'"));
+    for (final key in ['sessionId', 'activityName', 'color', 'startedAtMs']) {
+      expect(controller, contains('"$key"'), reason: key);
+      expect(bridge, contains("'$key'"), reason: key);
+    }
+    expect(intent, contains('"stop_request.json"'));
+    expect(storage, contains("'stop_request.json'"));
+    for (final key in ['sessionId', 'endedAt']) {
+      expect(intent, contains('"$key"'), reason: key);
+    }
+    expect(read('ios/Runner/AppDelegate.swift'), contains('"onStopRequest"'));
+    expect(bridge, contains("'onStopRequest'"));
+  });
 }
