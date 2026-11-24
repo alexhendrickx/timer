@@ -13,20 +13,13 @@ loop that no CI run can stand in for.
 
 ## A. One-time platform setup (blocks the device items below)
 
-### A1. iOS widget / Action button / Siri Xcode target
-Source is in `ios/TimerWidget/` (`TimerWidget.swift`, `StartActivityIntent.swift`)
-but **not attached to an Xcode target** — that step needs the Xcode GUI.
-Follow `ios/TimerWidget/README.md`:
-1. Xcode → File → New → Target → **Widget Extension**, name `TimerWidget`,
-   uncheck "Include Configuration Intent".
-2. Replace the generated `TimerWidget.swift` with this repo's version; add
-   `StartActivityIntent.swift` to the new target.
-3. Add the App Group `group.be.alexhendrickx.timer` to the new target's
-   Signing & Capabilities (same as `Runner`).
-4. Confirm the extension is in the main app's "Embed App Extensions" phase.
-5. On a real device confirm automatic signing provisions the *extension*
-   target (only `Runner` has been confirmed from this environment).
-Until this is done, `flutter build ios` is unaffected but no widget appears.
+### A1. iOS widget / Action button / Siri
+Wired in the repo: `TimerWidget` extension target (iOS 17+, embedded in
+`Runner`), `StartActivityIntent` + Siri phrase in `Runner` (iOS 16+).
+Remaining: on a real device, confirm automatic signing provisions the
+extension (`be.alexhendrickx.timer.TimerWidget`, app group
+`group.be.alexhendrickx.timer`). `tool/release.sh ios` does this with the
+ASC API key.
 
 ### A2. Sign in with Apple (native only, no Services ID or .p8)
 The app signs in natively (`signInWithIdToken`), so Supabase needs only the
